@@ -1,11 +1,11 @@
 """
 '''
 Description: user-defined exceptions for the project
-Version: 1.0.0.20211011
+Version: 1.0.0.20211018
 Author: Arvin Zhao
 Date: 2021-10-11 16:57:58
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-11 20:28:46
+LastEditTime: 2021-10-18 15:38:18
 '''
 """
 
@@ -24,15 +24,15 @@ class BadCmdError(Exception):
         super.__init__(message)
 
 
-class UndefinedNetError(Exception):
-    """The class for defining the user-defined exception indicating that no simulated network is established."""
+class PoorPrepError(Exception):
+    """The class for defining the user-defined exception indicating that the preparation for an experiment is insufficient."""
 
-    def __init__(self, message: str = "simulated network undefined") -> None:
-        """The constructor of the class for defining the user-defined exception indicating that no simulated network is established.
+    def __init__(self, message: str = "poor preparation for an experiment") -> None:
+        """The constructor of the class for defining the user-defined exception indicating that the preparation for an experiment is insufficient.
 
         Parameters
         ----------
         message : str, optional
-            The error message (the default is "simulated network undefined").
+            The error message (the default is "poor preparation for an experiment").
         """
         super().__init__(message)

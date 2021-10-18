@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the simulated network for experiments
-Version: 1.0.0.20211011
+Version: 1.0.0.20211018
 Author: Arvin Zhao
 Date: 2021-10-10 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-11 17:45:59
+LastEditTime: 2021-10-18 18:40:00
 '''
 """
 
@@ -15,14 +15,14 @@ from mininet.net import Mininet
 from mininet.topolib import TreeTopo
 from mininet.util import dumpNodeConnections
 
-from errors import UndefinedNetError
+from errors import PoorPrepError
 
 
 class Net:
-    """The class for defining the simulated network with Mininet for experiments."""
+    """The class for defining the utilities of the simulated network with Mininet for experiments."""
 
     def __init__(self) -> None:
-        """The constructor of the class for defining the simulated network with Mininet for experiments."""
+        """The constructor of the class for defining the utilities of the simulated network with Mininet for experiments."""
         self.net = None  # Type: Mininet
 
     def start(self, has_clean_lab: bool = False) -> None:
@@ -40,9 +40,9 @@ class Net:
             topo=TreeTopo(depth=2, fanout=2)
         )  # Create a tree topology with 4 hosts and 3 switches (as the structure shown in topo.mn).
         self.net.start()
-        info("*** Dumping host connections:\n")
+        info("*** Dumping host connections\n")
         dumpNodeConnections(self.net.hosts)
-        info("*** Testing network connectivity:\n")
+        info("*** Testing network connectivity\n")
         self.net.pingAll()
 
     def stop(self, has_clean_lab: bool = True) -> None:
@@ -55,11 +55,11 @@ class Net:
 
         Raises
         ------
-        UndefinedNetError
+        PoorPrepError
             No simulated network is established. Check the call to the function `start()`.
         """
         if self.net is None:
-            raise UndefinedNetError
+            raise PoorPrepError(message="simulated network undefined")
 
         self.net.stop()
         self.net = None
