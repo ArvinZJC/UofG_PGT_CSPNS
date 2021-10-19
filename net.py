@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the simulated network for experiments
-Version: 1.0.0.20211018
+Version: 1.0.0.20211019
 Author: Arvin Zhao
 Date: 2021-10-10 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-18 18:40:00
+LastEditTime: 2021-10-19 01:46:10
 '''
 """
 
@@ -30,7 +30,7 @@ class Net:
 
         Parameters
         ----------
-        has_clean_lab : bool
+        has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulated network (the default is `False`).
         """
         if has_clean_lab:
@@ -50,7 +50,7 @@ class Net:
 
         Parameters
         ----------
-        has_clean_lab : bool
+        has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up after stopping the simulated network (the default is `True`).
 
         Raises
