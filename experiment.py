@@ -5,7 +5,7 @@ Version: 1.0.0.20211019
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-19 10:48:01
+LastEditTime: 2021-10-19 15:04:48
 '''
 """
 
@@ -17,6 +17,7 @@ from subprocess import PIPE, Popen
 import os
 
 from mininet.log import error, info, warning
+from mininet.util import quietRun
 
 from errors import BadCmdError, PoorPrepError
 from net import Net
@@ -31,7 +32,7 @@ class Experiment:
         Parameters
         ----------
         rtt : int, optional
-            The round-trip time (RTT) latency in millisecond (the default is 20).
+            The round-trip time (RTT) latency in milliseconds (the default is 20).
 
         Raises
         ------
@@ -41,6 +42,7 @@ class Experiment:
         self.__CLIENT = "client"
         self.__OUTPUT_BASE_DIR = "output"
         self.__OUTPUT_FILE = "result"
+        self.__OUTPUT_FILE_FORMATTED = "result_new"
         self.__bdp = None
         self.__mn = Net()
 
@@ -96,7 +98,6 @@ class Experiment:
             )
         else:
             cmd += f"parent 1: handle 2: {qdisc} "
-
             # TODO:
 
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
@@ -139,37 +140,41 @@ class Experiment:
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
 
-    def __iperf_client(self, client_no: int, time: int) -> None:
-        """TODO
+    def __format_output(self) -> None:
+        """Format the client hosts' output files."""
+        info("*** Formatting the client hosts' output files\n")
+
+        for i in [0, 1]:
+            self.__mn.net.hosts[i].cmdPrint(
+                f"cat {self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE} "
+                + "| grep sec | tr - ' ' | awk '{print $4,$8}' > "
+                + f"{self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE_FORMATTED}"
+            )
+
+    def __iperf_client(self, client_idx: int, time: int) -> None:
+        """A multiprocessing task to run an iPerf client.
 
         Parameters
         ----------
-        TODO
+        client_idx : int
+            The index of the client host.
+        time : int
+            The time in seconds for running an iPerf client.
         """
-        cmd = f"iperf -c {self.__mn.net.hosts[client_no + 2].IP()} -i 1 -t {time} > {self.__OUTPUT_BASE_DIR}/{self.__mn.net.hosts[client_no].name}/{self.__OUTPUT_FILE}"
-        info(
-            f'*** {self.__mn.net.hosts[client_no].name} : ("{cmd}") - starts at {datetime.now()}\n'
-        )
-        self.__mn.net.hosts[client_no].cmd(cmd)
+        cmd = f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} > {self.__OUTPUT_BASE_DIR}/h{client_idx + 1}/{self.__OUTPUT_FILE}"
+        info(f'*** h{client_idx + 1} : ("{cmd}")\n')
+        info(f"It starts at {datetime.now()} and should last for {time} second(s).\n")
+        self.__mn.net.hosts[client_idx].cmd(cmd)
 
-    def __launch_servers(self) -> list:
-        """Launch iPerf in the server mode.
-
-        Returns
-        -------
-        list
-            The `Popen` objects containing the execution of launching iPerf in the server mode.
-        """
-        info("*** Launching iPerf in the server mode\n")
-        servers = []
+    def __launch_servers(self) -> None:
+        """Launch iPerf in the server mode in the background."""
+        info("*** Launching iPerf in the server mode in the background\n")
 
         # h3 and h4.
         for i in [2, 3]:
-            cmd = f"iperf -i 1 -s > {self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE}"
-            servers.append(self.__mn.net.hosts[i].popen(cmd))
-            info(f'*** h{i + 1} : ("{cmd}")\n')
-
-        return servers
+            self.__mn.net.hosts[i].cmdPrint(
+                f"iperf -i 1 -s > {self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE} &"
+            )  # Add "&" in the end to run in the background.
 
     def __run_clients(self, time: int) -> None:
         """Run iPerf clients almost simultaneously.
@@ -177,7 +182,7 @@ class Experiment:
         Parameters
         ----------
         time : int
-            TODO
+            The time in seconds for running an iPerf client.
         """
         info("*** Running iPerf clients almost simultaneously\n")
         processes = []
@@ -244,11 +249,12 @@ class Experiment:
     def clear_output(self) -> None:
         """Clear the output directory."""
         try:
-            rmtree(path=self.__OUTPUT_BASE_DIR)
-            info("*** Clearing the output directory\n")
+            if os.path.isdir(self.__OUTPUT_BASE_DIR):
+                rmtree(path=self.__OUTPUT_BASE_DIR)
+                info("*** Clearing the output directory\n")
         except Exception as e:
             error(str(e) + "\n")
-            warning("You may need to clear the output directory manually.")
+            warning("You may need to clear the output directory manually.\n")
 
     def do(
         self,
@@ -271,7 +277,7 @@ class Experiment:
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulated network (the default is `False`).
         time : int, optional
-            TODO
+            The time in seconds for running an iPerf client (the default is 30).
 
         Raises
         ------
@@ -283,18 +289,22 @@ class Experiment:
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
 
+        if time <= 0:
+            time = 30
+            warning(
+                "Invalid time in seconds for running an iPerf client. The experiment default is used instead.\n"
+            )
+
         self.__mn.start(has_clean_lab=has_clean_lab)
         self.__set_delay()
         self.__set_host_buffer()
         self.__apply_qdisc(bw=bw, bw_unit=bw_unit, limit=10 * self.__bdp)  # Apply TBF.
         # TODO: AQM
         self.__create_output_dir()
-        servers = self.__launch_servers()  # TODO: no use
+        self.__launch_servers()
         self.__run_clients(time=time)
-
-        for server in servers:
-            server.terminate()
-
+        quietRun("killall -9 iperf")  # Shut down any iPerf that might still be running.
+        self.__format_output()
         self.__mn.stop()
 
     def set_bdp(self, bw: int = 1, bw_unit: str = "gbit") -> None:
