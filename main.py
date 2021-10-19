@@ -5,7 +5,7 @@ Version: 1.0.0.20211019
 Author: Arvin Zhao
 Date: 2021-10-10 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-19 15:05:00
+LastEditTime: 2021-10-19 15:24:18
 '''
 """
 
@@ -18,3 +18,9 @@ experiment = Experiment()
 experiment.clear_output()
 experiment.set_bdp()
 experiment.do(has_clean_lab=True, time=5)  # TODO: change to default when finishing dev.
+
+# matplotlib:
+# Queue occupancy on s1-eth2
+# Throughput over time from result_new (h1, h2)
+# RTT over time?
+# FCT?
