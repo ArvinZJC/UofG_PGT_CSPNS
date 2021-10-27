@@ -5,7 +5,7 @@ Version: 1.0.0.20211026
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-26 23:22:05
+LastEditTime: 2021-10-27 15:50:16
 '''
 """
 
@@ -19,6 +19,7 @@ import os
 from mininet.log import error, info, warning
 from mininet.util import quietRun
 
+from eval import plot_rtt, plot_throughput
 from errors import BadCmdError, PoorPrepError
 from net import Net
 
@@ -43,7 +44,8 @@ class Experiment:
         ValueError
             The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
         """
-        self.__CLIENT = "client"
+        self.__CLIENT = "client"  # The displayed name of the client in the outputs.
+        self.__QDISC = ["tbf"]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__mn = Net()
 
@@ -75,7 +77,14 @@ class Experiment:
         ------
         BadCmdError
             The executed command fails, so the classless queueing discipline is not applied. Check the command.
+        ValueError
+            The classless queueing discipline is invalid. Check if it is one of the supported ones.
         """
+        qdisc = qdisc.lower().strip()
+
+        if qdisc not in self.__QDISC:
+            raise ValueError("invalid classless queueing discipline")
+
         info(f"*** Applying {qdisc.upper()}\n")
         cmd = "tc qdisc add dev s1-eth2 "  # Apply the discipline on s1-eth2 to affect the right part of the tree topology.
 
@@ -235,26 +244,6 @@ class Experiment:
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
 
-    def apply_aqm(self, aqm: str) -> None:
-        """Apply an Active Queue Management (AQM) algorithm.
-
-        Parameters
-        ----------
-        aqm : str
-            A classless queueing discipline representing an AQM algorithm.
-
-        Raises
-        ------
-        ValueError
-            TODO The AQM algorithm is invalid. Check if the value is one of "codel".
-        """
-        aqm = aqm.lower().strip()
-
-        if aqm not in ["codel"]:
-            raise ValueError("invalid AQM algorithm")
-
-        # TODO:
-
     def clear_output(self) -> None:
         """Clear the output directory."""
         try:
@@ -314,6 +303,8 @@ class Experiment:
         self.__run_clients(time=time)
         quietRun("killall -9 iperf")  # Shut down any iPerf that might still be running.
         self.__format_output()
+        plot_rtt()
+        plot_throughput()
         self.__mn.stop()
 
     def set_bdp(self, bw: int = 1, bw_unit: str = "gbit") -> None:
