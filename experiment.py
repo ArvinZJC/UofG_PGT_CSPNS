@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211026
+Version: 1.0.0.20211027
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-27 15:50:16
+LastEditTime: 2021-10-27 15:54:01
 '''
 """
 
@@ -45,7 +45,9 @@ class Experiment:
             The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
         """
         self.__CLIENT = "client"  # The displayed name of the client in the outputs.
-        self.__QDISC = ["tbf"]  # A list of the supported classlist queueing disciplines.
+        self.__QDISC = [
+            "tbf"
+        ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__mn = Net()
 
