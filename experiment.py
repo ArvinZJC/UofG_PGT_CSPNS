@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211019
+Version: 1.0.0.20211026
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-19 15:04:48
+LastEditTime: 2021-10-26 23:22:05
 '''
 """
 
@@ -21,6 +21,10 @@ from mininet.util import quietRun
 
 from errors import BadCmdError, PoorPrepError
 from net import Net
+
+OUTPUT_BASE_DIR = "output"
+OUTPUT_FILE = "result.txt"
+OUTPUT_FILE_FORMATTED = "result_new.txt"
 
 
 class Experiment:
@@ -40,9 +44,6 @@ class Experiment:
             The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
         """
         self.__CLIENT = "client"
-        self.__OUTPUT_BASE_DIR = "output"
-        self.__OUTPUT_FILE = "result"
-        self.__OUTPUT_FILE_FORMATTED = "result_new"
         self.__bdp = None
         self.__mn = Net()
 
@@ -76,7 +77,7 @@ class Experiment:
             The executed command fails, so the classless queueing discipline is not applied. Check the command.
         """
         info(f"*** Applying {qdisc.upper()}\n")
-        cmd = "tc qdisc add dev s1-eth2 "
+        cmd = "tc qdisc add dev s1-eth2 "  # Apply the discipline on s1-eth2 to affect the right part of the tree topology.
 
         if qdisc == "tbf":
             hz = int(
@@ -135,7 +136,7 @@ class Experiment:
         info("*** Creating the hosts' output directories if they do not exist\n")
 
         for host in self.__mn.net.hosts:
-            output_dir = os.path.join(self.__OUTPUT_BASE_DIR, host.name)
+            output_dir = os.path.join(OUTPUT_BASE_DIR, host.name)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -146,9 +147,10 @@ class Experiment:
 
         for i in [0, 1]:
             self.__mn.net.hosts[i].cmdPrint(
-                f"cat {self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE} "
-                + "| grep sec | tr - ' ' | awk '{print $4,$8}' > "
-                + f"{self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE_FORMATTED}"
+                "cat "
+                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE)
+                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$15}' > "
+                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE_FORMATTED)
             )
 
     def __iperf_client(self, client_idx: int, time: int) -> None:
@@ -161,7 +163,10 @@ class Experiment:
         time : int
             The time in seconds for running an iPerf client.
         """
-        cmd = f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} > {self.__OUTPUT_BASE_DIR}/h{client_idx + 1}/{self.__OUTPUT_FILE}"
+        cmd = (
+            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} -e > "
+            + os.path.join(OUTPUT_BASE_DIR, f"h{client_idx + 1}", OUTPUT_FILE)
+        )
         info(f'*** h{client_idx + 1} : ("{cmd}")\n')
         info(f"It starts at {datetime.now()} and should last for {time} second(s).\n")
         self.__mn.net.hosts[client_idx].cmd(cmd)
@@ -173,7 +178,9 @@ class Experiment:
         # h3 and h4.
         for i in [2, 3]:
             self.__mn.net.hosts[i].cmdPrint(
-                f"iperf -i 1 -s > {self.__OUTPUT_BASE_DIR}/h{i + 1}/{self.__OUTPUT_FILE} &"
+                "iperf -i 1 -s > "
+                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE)
+                + " &"
             )  # Add "&" in the end to run in the background.
 
     def __run_clients(self, time: int) -> None:
@@ -205,14 +212,16 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        self.__mn.net.hosts[0].cmdPrint("ping -c4", self.__mn.net.hosts[2].IP())
-        cmd = f"tc qdisc add dev s2-eth1 root netem delay {self.__rtt}ms"  # Set the delay on s2-eth1 to affect h1 and h2.
+        self.__mn.net.hosts[0].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
+        cmd = f"tc qdisc add dev s2-eth3 root netem delay {self.__rtt}ms"  # Set the delay on s2-eth3 to affect h1 and h2.
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
 
         if not os.WIFEXITED(os.system(cmd)):
             raise BadCmdError
 
-        self.__mn.net.hosts[0].cmdPrint("ping -c4", self.__mn.net.hosts[2].IP())
+        # Validation.
+        self.__mn.net.hosts[0].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
+        self.__mn.net.hosts[1].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
 
     def __set_host_buffer(self) -> None:
         """Set the hosts' buffer size."""
@@ -249,8 +258,8 @@ class Experiment:
     def clear_output(self) -> None:
         """Clear the output directory."""
         try:
-            if os.path.isdir(self.__OUTPUT_BASE_DIR):
-                rmtree(path=self.__OUTPUT_BASE_DIR)
+            if os.path.isdir(OUTPUT_BASE_DIR):
+                rmtree(path=OUTPUT_BASE_DIR)
                 info("*** Clearing the output directory\n")
         except Exception as e:
             error(str(e) + "\n")

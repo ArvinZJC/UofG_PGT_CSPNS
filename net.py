@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the simulated network for experiments
-Version: 1.0.0.20211019
+Version: 1.0.0.20211026
 Author: Arvin Zhao
 Date: 2021-10-10 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-19 01:46:10
+LastEditTime: 2021-10-26 23:16:42
 '''
 """
 
@@ -40,8 +40,8 @@ class Net:
             topo=TreeTopo(depth=2, fanout=2)
         )  # Create a tree topology with 4 hosts and 3 switches (as the structure shown in topo.mn).
         self.net.start()
-        info("*** Dumping host connections\n")
-        dumpNodeConnections(self.net.hosts)
+        info("*** Dumping connections\n")
+        dumpNodeConnections(self.net.switches)
         info("*** Testing network connectivity\n")
         self.net.pingAll()
 
