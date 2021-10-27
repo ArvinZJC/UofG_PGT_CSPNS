@@ -5,7 +5,7 @@ Version: 1.0.0.20211027
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-27 15:54:01
+LastEditTime: 2021-10-27 15:57:33
 '''
 """
 
@@ -19,13 +19,9 @@ import os
 from mininet.log import error, info, warning
 from mininet.util import quietRun
 
-from eval import plot_rtt, plot_throughput
+from eval import OUTPUT_BASE_DIR, OUTPUT_FILE, OUTPUT_FILE_FORMATTED, plot_rtt, plot_throughput
 from errors import BadCmdError, PoorPrepError
 from net import Net
-
-OUTPUT_BASE_DIR = "output"
-OUTPUT_FILE = "result.txt"
-OUTPUT_FILE_FORMATTED = "result_new.txt"
 
 
 class Experiment:
@@ -223,7 +219,8 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        self.__mn.net.hosts[0].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
+        ping = "ping -c 4"
+        self.__mn.net.hosts[0].cmdPrint(ping, self.__mn.net.hosts[2].IP())
         cmd = f"tc qdisc add dev s2-eth3 root netem delay {self.__rtt}ms"  # Set the delay on s2-eth3 to affect h1 and h2.
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
 
@@ -231,8 +228,8 @@ class Experiment:
             raise BadCmdError
 
         # Validation.
-        self.__mn.net.hosts[0].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
-        self.__mn.net.hosts[1].cmdPrint("ping -c 4", self.__mn.net.hosts[2].IP())
+        self.__mn.net.hosts[0].cmdPrint(ping, self.__mn.net.hosts[2].IP())
+        self.__mn.net.hosts[1].cmdPrint(ping, self.__mn.net.hosts[2].IP())
 
     def __set_host_buffer(self) -> None:
         """Set the hosts' buffer size."""

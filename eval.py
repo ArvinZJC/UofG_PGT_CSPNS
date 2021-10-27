@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 1.0.0.20211026
+Version: 1.0.0.20211027
 Author: Arvin Zhao
 Date: 2021-10-19 15:22:06
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-26 21:42:42
+LastEditTime: 2021-10-27 15:59:32
 '''
 """
 
@@ -14,18 +14,19 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from experiment import OUTPUT_BASE_DIR, OUTPUT_FILE_FORMATTED
-
 HOST_NUMS = [1, 2]  # A list of host numbers.
+OUTPUT_BASE_DIR = "output"
+OUTPUT_FILE = "result.txt"
+OUTPUT_FILE_FORMATTED = "result_new.txt"
 
 
-def import_output(type: str) -> pd.DataFrame:
+def import_output(category: str) -> pd.DataFrame:
     """Import the output from the output file.
 
     Parameters
     ----------
-    type : str
-        The type of the output (e.g., RTT).
+    category : str
+        The category of the output (e.g., RTT).
 
     Returns
     -------
@@ -35,14 +36,14 @@ def import_output(type: str) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        The type does not exist. Check if the value is one of "RTT" and "throughput".
+        The category does not exist. Check if the value is one of "RTT" and "throughput".
     """
-    type = type.lower().strip()
+    category = category.lower().strip()
 
-    if type not in ["rtt", "throughput"]:
-        raise ValueError("invalid type")
+    if category not in ["rtt", "throughput"]:
+        raise ValueError("invalid category")
     else:
-        col_idx = 1 if type == "throughput" else 2
+        col_idx = 1 if category == "throughput" else 2
 
     return [
         pd.read_csv(
@@ -93,7 +94,7 @@ def make_plot(data: list, path: str, title: str, y_label: str) -> None:
 def plot_rtt() -> None:
     """Plot a line chart showing the RTT over time."""
     make_plot(
-        data=import_output(type="RTT"),
+        data=import_output(category="RTT"),
         path=os.path.join(OUTPUT_BASE_DIR, "RTT.png"),
         title="RTT over time",
         y_label="RTT (us)",
@@ -103,7 +104,7 @@ def plot_rtt() -> None:
 def plot_throughput() -> None:
     """Plot a line chart showing the throughput over time."""
     make_plot(
-        data=import_output(type="throughput"),
+        data=import_output(category="throughput"),
         path=os.path.join(OUTPUT_BASE_DIR, "throughput.png"),
         title="Throughput over time",
         y_label="throughput (Mbps)",
