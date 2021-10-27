@@ -5,7 +5,7 @@ Version: 1.0.0.20211027
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-27 15:57:33
+LastEditTime: 2021-10-27 16:39:44
 '''
 """
 
@@ -19,7 +19,13 @@ import os
 from mininet.log import error, info, warning
 from mininet.util import quietRun
 
-from eval import OUTPUT_BASE_DIR, OUTPUT_FILE, OUTPUT_FILE_FORMATTED, plot_rtt, plot_throughput
+from eval import (
+    OUTPUT_BASE_DIR,
+    OUTPUT_FILE,
+    OUTPUT_FILE_FORMATTED,
+    plot_rtt,
+    plot_throughput,
+)
 from errors import BadCmdError, PoorPrepError
 from net import Net
 
@@ -42,7 +48,11 @@ class Experiment:
         """
         self.__CLIENT = "client"  # The displayed name of the client in the outputs.
         self.__QDISC = [
-            "tbf"
+            "codel",
+            "pie",
+            "red",
+            "sfq",
+            "tbf",
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__mn = Net()
@@ -58,7 +68,7 @@ class Experiment:
     ) -> None:
         """Apply a classless queueing discipline.
 
-        Support Token Bucket Filter (TBF) TODO.
+        Support Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Random Early Detection (RED), Token Bucket Filter (TBF), and Proportional Integral Controller-Enhanced (PIE).
 
         Parameters
         ----------
@@ -69,7 +79,7 @@ class Experiment:
         limit : int
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
         qdisc : str, optional
-            A classless queueing discipline (the default is "tbf", and the other accepted values are TODO).
+            A classless queueing discipline (the default is "tbf").
 
         Raises
         ------
@@ -296,7 +306,11 @@ class Experiment:
         self.__set_delay()
         self.__set_host_buffer()
         self.__apply_qdisc(bw=bw, bw_unit=bw_unit, limit=10 * self.__bdp)  # Apply TBF.
+
         # TODO: AQM
+        # if aqm is not None and aqm.lower().trim() != "tbf":
+        # self.__apply_qdisc()
+
         self.__create_output_dir()
         self.__launch_servers()
         self.__run_clients(time=time)
