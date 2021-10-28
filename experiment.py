@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211027
+Version: 1.0.0.20211028
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-27 16:39:44
+LastEditTime: 2021-10-28 19:07:55
 '''
 """
 
@@ -64,7 +64,18 @@ class Experiment:
         self.__rtt = rtt
 
     def __apply_qdisc(
-        self, bw: int, bw_unit: str, limit: int, qdisc: str = "tbf"
+        self,
+        alpha: int,
+        avpkt: int,
+        beta: int,
+        bw: int,
+        bw_unit: str,
+        interval: int,
+        limit: int,
+        perturb: int,
+        target: int,
+        tupdate: int,
+        qdisc: str = "tbf",
     ) -> None:
         """Apply a classless queueing discipline.
 
@@ -72,12 +83,28 @@ class Experiment:
 
         Parameters
         ----------
+        alpha : int
+            A smaller parameter for PIE to control the drop probability.
+        avpkt : int
+            A parameter for RED used with the burst to determine the time constant for average queue size calculations.
+        beta : int
+            A larger parameter for PIE to control the drop probability.
         bw : int
             The bandwidth.
         bw_unit : str
             The bandwidth unit.
+        interval : int
+            A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
+            For CoDel and PIE, the limit on the queue size in packets.
+        perturb : int
+            The interval in seconds for the queue algorithm perturbation in SFQ.
+        target : int
+            For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds.
+            For PIE, the expected queue delay in milliseconds.
+        tupdate : int
+            The frequency in milliseconds for PIE at which the system drop probability is calculated.
         qdisc : str, optional
             A classless queueing discipline (the default is "tbf").
 
@@ -117,6 +144,18 @@ class Experiment:
         else:
             cmd += f"parent 1: handle 2: {qdisc} "
             # TODO:
+            if qdisc == "codel":
+                cmd += f"limit {limit} interval {interval}ms target {target}ms"
+            elif qdisc == "pie":
+                cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
+            elif qdisc == "red":
+                # Reference: https://man7.org/linux/man-pages/man8/tc-red.8.html
+                max = int(limit / 4)
+                min = int(max / 3)
+                burst = (2 * min + max) / (3 * avpkt)
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {burst} limit {limit} max {max} min {min}"
+            else:
+                cmd += f"perturb {perturb}"
 
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
 
@@ -265,26 +304,52 @@ class Experiment:
 
     def do(
         self,
+        alpha: int = 2,
+        avpkt: int = 1000,
         aqm: str = None,
+        beta: int = 25,
         bw: int = 1,
         bw_unit: str = "gbit",
         has_clean_lab: bool = False,
+        interval: int = 100,
+        limit: int = 1000,
+        perturb: int = 10,
+        target: int = 5,
         time: int = 30,
+        tupdate: int = 15,
     ) -> None:
         """Do an experiment.
 
         Parameters
         ----------
+        alpha : int, optional
+            A smaller parameter for PIE to control the drop probability (the default is 2, and the value should be in the range between 0 and 32).
         aqm : str, optional
             A classless queueing discipline representing an AQM algorithm (the default is `None`).
+        avpkt : int, optional
+            A parameter for RED used with the burst to determine the time constant for average queue size calculations (the default is 1000).
+        beta : int, optional
+            A larger parameter for PIE to control the drop probability (the default is 25, and the value should be in the range between 0 and 32).
         bw : int, optional
             The bandwidth (the default is 1).
         bw_unit : str, optional
             The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulated network (the default is `False`).
+        interval : int, optional
+            A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
+        limit : int, optional
+            For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is not for this case).
+            For CoDel and PIE, the limit on the queue size in packets (the default is 1000).
+        perturb : int, optional
+            The interval in seconds for the queue algorithm perturbation in SFQ (the default is 10).
+        target : int, optional
+            For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
+            For PIE, the expected queue delay in milliseconds (the default is not for this case).
         time : int, optional
             The time in seconds for running an iPerf client (the default is 30).
+        tupdate : int, optional
+            The frequency in milliseconds for PIE at which the system drop probability is calculated (the default is 15).
 
         Raises
         ------
@@ -296,6 +361,7 @@ class Experiment:
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
 
+        # TODO: for other parameters; no need to show warning for each parameter.
         if time <= 0:
             time = 30
             warning(
@@ -307,9 +373,20 @@ class Experiment:
         self.__set_host_buffer()
         self.__apply_qdisc(bw=bw, bw_unit=bw_unit, limit=10 * self.__bdp)  # Apply TBF.
 
-        # TODO: AQM
-        # if aqm is not None and aqm.lower().trim() != "tbf":
-        # self.__apply_qdisc()
+        if aqm is not None and aqm.lower().trim() != "tbf":
+            self.__apply_qdisc(
+                alpha=alpha,
+                avpkt=avpkt,
+                beta=beta,
+                bw=bw,
+                bw_unit=bw_unit,
+                interval=interval,
+                limit=limit,
+                perturb=perturb,
+                qdisc=aqm,
+                target=target,
+                tupdate=tupdate,
+            )
 
         self.__create_output_dir()
         self.__launch_servers()
