@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211028
+Version: 1.0.0.20211029
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-28 19:07:55
+LastEditTime: 2021-10-29 15:39:21
 '''
 """
 
@@ -28,6 +28,9 @@ from eval import (
 )
 from errors import BadCmdError, PoorPrepError
 from net import Net
+
+ALPHA_DEFAULT = 2
+BETA_DEFAULT = 25
 
 
 class Experiment:
@@ -62,6 +65,7 @@ class Experiment:
             raise ValueError("invalid RTT value")
 
         self.__rtt = rtt
+        self.__suboutput = None  # The output folder name of an experiment group.
 
     def __apply_qdisc(
         self,
@@ -96,8 +100,8 @@ class Experiment:
         interval : int
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
-            For TBF, the number of bytes that can be queued waiting for tokens to become available.
             For CoDel and PIE, the limit on the queue size in packets.
+            For TBF, the number of bytes that can be queued waiting for tokens to become available.
         perturb : int
             The interval in seconds for the queue algorithm perturbation in SFQ.
         target : int
@@ -115,8 +119,6 @@ class Experiment:
         ValueError
             The classless queueing discipline is invalid. Check if it is one of the supported ones.
         """
-        qdisc = qdisc.lower().strip()
-
         if qdisc not in self.__QDISC:
             raise ValueError("invalid classless queueing discipline")
 
@@ -143,7 +145,7 @@ class Experiment:
             )
         else:
             cmd += f"parent 1: handle 2: {qdisc} "
-            # TODO:
+
             if qdisc == "codel":
                 cmd += f"limit {limit} interval {interval}ms target {target}ms"
             elif qdisc == "pie":
@@ -152,7 +154,7 @@ class Experiment:
                 # Reference: https://man7.org/linux/man-pages/man8/tc-red.8.html
                 max = int(limit / 4)
                 min = int(max / 3)
-                burst = (2 * min + max) / (3 * avpkt)
+                burst = int((2 * min + max) / (3 * avpkt))
                 cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {burst} limit {limit} max {max} min {min}"
             else:
                 cmd += f"perturb {perturb}"
@@ -192,7 +194,7 @@ class Experiment:
         info("*** Creating the hosts' output directories if they do not exist\n")
 
         for host in self.__mn.net.hosts:
-            output_dir = os.path.join(OUTPUT_BASE_DIR, host.name)
+            output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, host.name)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -204,9 +206,16 @@ class Experiment:
         for i in [0, 1]:
             self.__mn.net.hosts[i].cmdPrint(
                 "cat "
-                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE)
+                + os.path.join(
+                    OUTPUT_BASE_DIR, self.__suboutput, f"h{i + 1}", OUTPUT_FILE
+                )
                 + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$15}' > "
-                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE_FORMATTED)
+                + os.path.join(
+                    OUTPUT_BASE_DIR,
+                    self.__suboutput,
+                    f"h{i + 1}",
+                    OUTPUT_FILE_FORMATTED,
+                )
             )
 
     def __iperf_client(self, client_idx: int, time: int) -> None:
@@ -221,7 +230,9 @@ class Experiment:
         """
         cmd = (
             f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} -e > "
-            + os.path.join(OUTPUT_BASE_DIR, f"h{client_idx + 1}", OUTPUT_FILE)
+            + os.path.join(
+                OUTPUT_BASE_DIR, self.__suboutput, f"h{client_idx + 1}", OUTPUT_FILE
+            )
         )
         info(f'*** h{client_idx + 1} : ("{cmd}")\n')
         info(f"It starts at {datetime.now()} and should last for {time} second(s).\n")
@@ -235,7 +246,9 @@ class Experiment:
         for i in [2, 3]:
             self.__mn.net.hosts[i].cmdPrint(
                 "iperf -i 1 -s > "
-                + os.path.join(OUTPUT_BASE_DIR, f"h{i + 1}", OUTPUT_FILE)
+                + os.path.join(
+                    OUTPUT_BASE_DIR, self.__suboutput, f"h{i + 1}", OUTPUT_FILE
+                )
                 + " &"
             )  # Add "&" in the end to run in the background.
 
@@ -304,10 +317,11 @@ class Experiment:
 
     def do(
         self,
-        alpha: int = 2,
+        name: str,
+        alpha: int = ALPHA_DEFAULT,
         avpkt: int = 1000,
         aqm: str = None,
-        beta: int = 25,
+        beta: int = BETA_DEFAULT,
         bw: int = 1,
         bw_unit: str = "gbit",
         has_clean_lab: bool = False,
@@ -322,14 +336,16 @@ class Experiment:
 
         Parameters
         ----------
+        name : int
+            The experiment name.
         alpha : int, optional
-            A smaller parameter for PIE to control the drop probability (the default is 2, and the value should be in the range between 0 and 32).
+            A smaller parameter for PIE to control the drop probability (the default is defined by a constant `ALPHA_DEFAULT`, and the value should be in the range between 0 and 32).
         aqm : str, optional
             A classless queueing discipline representing an AQM algorithm (the default is `None`).
         avpkt : int, optional
             A parameter for RED used with the burst to determine the time constant for average queue size calculations (the default is 1000).
         beta : int, optional
-            A larger parameter for PIE to control the drop probability (the default is 25, and the value should be in the range between 0 and 32).
+            A larger parameter for PIE to control the drop probability (the default is defined by a constant `BETA_DEFAULT`, and the value should be in the range between 0 and 32).
         bw : int, optional
             The bandwidth (the default is 1).
         bw_unit : str, optional
@@ -339,8 +355,8 @@ class Experiment:
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
-            For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is not for this case).
             For CoDel and PIE, the limit on the queue size in packets (the default is 1000).
+            For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is not for this case).
         perturb : int, optional
             The interval in seconds for the queue algorithm perturbation in SFQ (the default is 10).
         target : int, optional
@@ -361,41 +377,61 @@ class Experiment:
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
 
-        # TODO: for other parameters; no need to show warning for each parameter.
-        if time <= 0:
-            time = 30
+        if alpha >= beta or alpha < 0 or alpha > 32 or beta < 0 or beta > 32:
+            alpha = ALPHA_DEFAULT
+            beta = BETA_DEFAULT
             warning(
-                "Invalid time in seconds for running an iPerf client. The experiment default is used instead.\n"
+                "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
             )
 
+        info(f"****** Starting the experiment: {name}\n")
         self.__mn.start(has_clean_lab=has_clean_lab)
         self.__set_delay()
         self.__set_host_buffer()
-        self.__apply_qdisc(bw=bw, bw_unit=bw_unit, limit=10 * self.__bdp)  # Apply TBF.
+        self.__apply_qdisc(
+            alpha=alpha,
+            avpkt=avpkt,
+            beta=beta,
+            bw=bw,
+            bw_unit=bw_unit,
+            interval=interval,
+            limit=10 * self.__bdp,
+            perturb=perturb,
+            target=target,
+            tupdate=tupdate,
+        )  # Apply TBF.
+        self.__suboutput = "baseline"
 
-        if aqm is not None and aqm.lower().trim() != "tbf":
-            self.__apply_qdisc(
-                alpha=alpha,
-                avpkt=avpkt,
-                beta=beta,
-                bw=bw,
-                bw_unit=bw_unit,
-                interval=interval,
-                limit=limit,
-                perturb=perturb,
-                qdisc=aqm,
-                target=target,
-                tupdate=tupdate,
-            )
+        if aqm is not None:
+            aqm = aqm.lower().strip()
+
+            if aqm != "tbf":
+                self.__apply_qdisc(
+                    alpha=alpha,
+                    avpkt=avpkt,
+                    beta=beta,
+                    bw=bw,
+                    bw_unit=bw_unit,
+                    interval=interval,
+                    limit=limit,
+                    perturb=perturb,
+                    qdisc=aqm,
+                    target=target,
+                    tupdate=tupdate,
+                )
+                self.__suboutput = aqm
 
         self.__create_output_dir()
         self.__launch_servers()
         self.__run_clients(time=time)
         quietRun("killall -9 iperf")  # Shut down any iPerf that might still be running.
         self.__format_output()
-        plot_rtt()
-        plot_throughput()
+        info("*** Plotting RTT over time\n")
+        plot_rtt(suboutput=self.__suboutput)
+        info("*** Plotting throughput over time\n")
+        plot_throughput(suboutput=self.__suboutput)
         self.__mn.stop()
+        info("\n")
 
     def set_bdp(self, bw: int = 1, bw_unit: str = "gbit") -> None:
         """Set the bandwidth-delay product (BDP).

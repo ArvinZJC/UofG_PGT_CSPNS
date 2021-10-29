@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 1.0.0.20211027
+Version: 1.0.0.20211029
 Author: Arvin Zhao
 Date: 2021-10-19 15:22:06
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-27 15:59:32
+LastEditTime: 2021-10-29 15:32:27
 '''
 """
 
@@ -20,13 +20,15 @@ OUTPUT_FILE = "result.txt"
 OUTPUT_FILE_FORMATTED = "result_new.txt"
 
 
-def import_output(category: str) -> pd.DataFrame:
+def import_output(category: str, suboutput: str) -> pd.DataFrame:
     """Import the output from the output file.
 
     Parameters
     ----------
     category : str
         The category of the output (e.g., RTT).
+    suboutput : str
+        The output folder name of an experiment group.
 
     Returns
     -------
@@ -47,7 +49,7 @@ def import_output(category: str) -> pd.DataFrame:
 
     return [
         pd.read_csv(
-            os.path.join(OUTPUT_BASE_DIR, f"h{i}", OUTPUT_FILE_FORMATTED),
+            os.path.join(OUTPUT_BASE_DIR, suboutput, f"h{i}", OUTPUT_FILE_FORMATTED),
             header=None,
             sep=" ",
         )[:-1][col_idx]
@@ -91,21 +93,33 @@ def make_plot(data: list, path: str, title: str, y_label: str) -> None:
     plt.savefig(path)
 
 
-def plot_rtt() -> None:
-    """Plot a line chart showing the RTT over time."""
+def plot_rtt(suboutput: str) -> None:
+    """Plot a line chart showing the RTT over time.
+
+    Parameters
+    ----------
+    suboutput : str
+        The output folder name of an experiment group.
+    """
     make_plot(
-        data=import_output(category="RTT"),
-        path=os.path.join(OUTPUT_BASE_DIR, "RTT.png"),
+        data=import_output(category="RTT", suboutput=suboutput),
+        path=os.path.join(OUTPUT_BASE_DIR, suboutput, "RTT.png"),
         title="RTT over time",
         y_label="RTT (us)",
     )
 
 
-def plot_throughput() -> None:
-    """Plot a line chart showing the throughput over time."""
+def plot_throughput(suboutput: str) -> None:
+    """Plot a line chart showing the throughput over time.
+
+    Parameters
+    ----------
+    suboutput : str
+        The output folder name of an experiment group.
+    """
     make_plot(
-        data=import_output(category="throughput"),
-        path=os.path.join(OUTPUT_BASE_DIR, "throughput.png"),
+        data=import_output(category="throughput", suboutput=suboutput),
+        path=os.path.join(OUTPUT_BASE_DIR, suboutput, "throughput.png"),
         title="Throughput over time",
         y_label="throughput (Mbps)",
     )
