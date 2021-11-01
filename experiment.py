@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211029
+Version: 1.0.0.20211031
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-29 15:39:21
+LastEditTime: 2021-10-31 15:05:11
 '''
 """
 
@@ -13,7 +13,7 @@ from datetime import datetime
 from math import ceil
 from multiprocessing import Process
 from shutil import rmtree
-from subprocess import PIPE, Popen
+from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
 import os
 
 from mininet.log import error, info, warning
@@ -160,9 +160,7 @@ class Experiment:
                 cmd += f"perturb {perturb}"
 
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
-
-        if not os.WIFEXITED(os.system(cmd)):
-            raise BadCmdError
+        check_call(cmd, shell=True)
 
     def __check_bw_unit(self, bw_unit: str) -> str:
         """Check if the bandwidth unit is one of "gbit" and "mbit".
@@ -190,11 +188,13 @@ class Experiment:
         return bw_unit
 
     def __create_output_dir(self) -> None:
-        """Create the hosts' output directories."""
-        info("*** Creating the hosts' output directories if they do not exist\n")
+        """Create the output directories."""
+        info("*** Creating the output directories if they do not exist\n")
+        sections = [host.name for host in self.__mn.net.hosts]
+        sections.extend(["s2-eth1", "s2-eth2"])
 
-        for host in self.__mn.net.hosts:
-            output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, host.name)
+        for section in sections:
+            output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, section)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -272,6 +272,20 @@ class Experiment:
         for process in processes:
             process.join()
 
+    def __run_wireshark(self) -> None:
+        """Run Wireshark (TShark) in the background."""
+        info("*** Running Wireshark (TShark) in the background\n")
+        processes = []
+
+        # s2-eth1 for h1 and s2-eth2 for h2.
+        for i in [1, 2]:
+            process = Process(target=self.__wireshark, args=(i,))
+            processes.append(process)
+            process.start()
+
+        for process in processes:
+            process.join()
+
     def __set_delay(self) -> None:
         """Emulate high-latency WAN.
 
@@ -285,9 +299,7 @@ class Experiment:
         self.__mn.net.hosts[0].cmdPrint(ping, self.__mn.net.hosts[2].IP())
         cmd = f"tc qdisc add dev s2-eth3 root netem delay {self.__rtt}ms"  # Set the delay on s2-eth3 to affect h1 and h2.
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
-
-        if not os.WIFEXITED(os.system(cmd)):
-            raise BadCmdError
+        check_call(cmd, shell=True)
 
         # Validation.
         self.__mn.net.hosts[0].cmdPrint(ping, self.__mn.net.hosts[2].IP())
@@ -304,6 +316,19 @@ class Experiment:
             host.cmdPrint(
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
+
+    def __wireshark(self, s_eth_idx: int) -> None:
+        """A multiprocessing task to run Wireshark (TShark).
+
+        Parameters
+        ----------
+        s_eth_idx : int
+            The index of a switch's interface.
+        """
+        s_eth = f"s2-eth{s_eth_idx}"
+        cmd = f"tshark -i {s_eth} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)} &"
+        info(f'*** {s_eth} : ("{cmd}")\n')
+        check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
 
     def clear_output(self) -> None:
         """Clear the output directory."""
@@ -423,8 +448,12 @@ class Experiment:
 
         self.__create_output_dir()
         self.__launch_servers()
+        self.__run_wireshark()
         self.__run_clients(time=time)
         quietRun("killall -9 iperf")  # Shut down any iPerf that might still be running.
+        quietRun(
+            "killall -9 tshark"
+        )  # Shut down any TShark that might still be running.
         self.__format_output()
         info("*** Plotting RTT over time\n")
         plot_rtt(suboutput=self.__suboutput)
