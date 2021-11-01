@@ -1,16 +1,17 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 1.0.0.20211029
+Version: 1.0.0.20211101
 Author: Arvin Zhao
 Date: 2021-10-19 15:22:06
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-29 15:32:27
+LastEditTime: 2021-11-01 19:28:33
 '''
 """
 
 import os
 
+from mininet.log import info
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -101,6 +102,7 @@ def plot_rtt(suboutput: str) -> None:
     suboutput : str
         The output folder name of an experiment group.
     """
+    info("*** Plotting RTT over time\n")
     make_plot(
         data=import_output(category="RTT", suboutput=suboutput),
         path=os.path.join(OUTPUT_BASE_DIR, suboutput, "RTT.png"),
@@ -117,6 +119,7 @@ def plot_throughput(suboutput: str) -> None:
     suboutput : str
         The output folder name of an experiment group.
     """
+    info("*** Plotting throughput over time\n")
     make_plot(
         data=import_output(category="throughput", suboutput=suboutput),
         path=os.path.join(OUTPUT_BASE_DIR, suboutput, "throughput.png"),

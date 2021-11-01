@@ -5,7 +5,7 @@ Version: 1.0.0.20211101
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-01 17:59:42
+LastEditTime: 2021-11-01 20:28:34
 '''
 """
 
@@ -58,6 +58,10 @@ class Experiment:
             "sfq",
             "tbf",
         ]  # A list of the supported classlist queueing disciplines.
+        self.__S_ETHS = [
+            "s2-eth1",
+            "s2-eth2",
+        ]  # A list of the switch's interfaces for TCP traffic capture.
         self.__bdp = None
         self.__mn = Net()
 
@@ -192,7 +196,7 @@ class Experiment:
         """Create the output directories."""
         info("*** Creating the output directories if they do not exist\n")
         sections = [host.name for host in self.__mn.net.hosts]
-        sections.extend(["s2-eth1", "s2-eth2"])
+        sections.extend(self.__S_ETHS)
 
         for section in sections:
             output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, section)
@@ -201,8 +205,8 @@ class Experiment:
                 os.makedirs(output_dir)
 
     def __format_output(self) -> None:
-        """Format the client hosts' output files."""
-        info("*** Formatting the client hosts' output files\n")
+        """Format the output files."""
+        info("*** Formatting the output files\n")
 
         for i in [0, 1]:
             self.__mn.net.hosts[i].cmdPrint(
@@ -210,7 +214,7 @@ class Experiment:
                 + os.path.join(
                     OUTPUT_BASE_DIR, self.__suboutput, f"h{i + 1}", OUTPUT_FILE
                 )
-                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$15}' > "
+                + "| grep sec | tr - ' ' | awk '{print $4,$8}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR,
                     self.__suboutput,
@@ -218,6 +222,19 @@ class Experiment:
                     OUTPUT_FILE_FORMATTED,
                 )
             )
+
+        # TODO: TSval, TSecr
+        for s_eth in self.__S_ETHS:
+            cmd = (
+                "cat "
+                + os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)
+                + "| sed 's/,\s*/,/g' | awk '{print $2,$3,$4,$5,$11}' > "
+                + os.path.join(
+                    OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE_FORMATTED
+                )
+            )
+            info(f'*** {s_eth} : ("{cmd}")\n')
+            check_call(cmd, shell=True)
 
     def __iperf_client(self, client_idx: int, time: int) -> None:
         """A multiprocessing task to run an iPerf client.
@@ -230,7 +247,7 @@ class Experiment:
             The time in seconds for running an iPerf client.
         """
         cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} -e > "
+            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} > "
             + os.path.join(
                 OUTPUT_BASE_DIR, self.__suboutput, f"h{client_idx + 1}", OUTPUT_FILE
             )
@@ -326,12 +343,12 @@ class Experiment:
         Parameters
         ----------
         s_eth_idx : int
-            The index of a switch's interface.
+            The index of a switch's interface for TCP traffic capture.
         """
         s_eth = f"s2-eth{s_eth_idx}"
         cmd = f"tshark -f 'tcp' -i {s_eth} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)} &"
-        check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
         info(f'*** {s_eth} : ("{cmd}")\n')
+        check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
         info(f"It starts at {datetime.now()}.\n")
 
     def clear_output(self) -> None:
@@ -461,9 +478,7 @@ class Experiment:
             "killall -9 iperf"
         )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
-        info("*** Plotting RTT over time\n")
-        plot_rtt(suboutput=self.__suboutput)
-        info("*** Plotting throughput over time\n")
+        # TODO: plot_rtt(suboutput=self.__suboutput)
         plot_throughput(suboutput=self.__suboutput)
         self.__mn.stop()
         info("\n")
