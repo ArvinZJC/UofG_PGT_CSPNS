@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211031
+Version: 1.0.0.20211101
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-10-31 15:05:11
+LastEditTime: 2021-11-01 17:59:42
 '''
 """
 
@@ -14,6 +14,7 @@ from math import ceil
 from multiprocessing import Process
 from shutil import rmtree
 from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
+from time import sleep
 import os
 
 from mininet.log import error, info, warning
@@ -26,7 +27,7 @@ from eval import (
     plot_rtt,
     plot_throughput,
 )
-from errors import BadCmdError, PoorPrepError
+from errors import PoorPrepError
 from net import Net
 
 ALPHA_DEFAULT = 2
@@ -286,6 +287,8 @@ class Experiment:
         for process in processes:
             process.join()
 
+        sleep(1)  # Wait for 1 second to ensure full capture.
+
     def __set_delay(self) -> None:
         """Emulate high-latency WAN.
 
@@ -326,9 +329,10 @@ class Experiment:
             The index of a switch's interface.
         """
         s_eth = f"s2-eth{s_eth_idx}"
-        cmd = f"tshark -i {s_eth} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)} &"
-        info(f'*** {s_eth} : ("{cmd}")\n')
+        cmd = f"tshark -f 'tcp' -i {s_eth} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)} &"
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
+        info(f'*** {s_eth} : ("{cmd}")\n')
+        info(f"It starts at {datetime.now()}.\n")
 
     def clear_output(self) -> None:
         """Clear the output directory."""
@@ -447,13 +451,15 @@ class Experiment:
                 self.__suboutput = aqm
 
         self.__create_output_dir()
-        self.__launch_servers()
         self.__run_wireshark()
+        self.__launch_servers()
         self.__run_clients(time=time)
-        quietRun("killall -9 iperf")  # Shut down any iPerf that might still be running.
         quietRun(
-            "killall -9 tshark"
-        )  # Shut down any TShark that might still be running.
+            "killall -15 tshark"
+        )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
+        quietRun(
+            "killall -9 iperf"
+        )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
         info("*** Plotting RTT over time\n")
         plot_rtt(suboutput=self.__suboutput)
