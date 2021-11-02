@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211101
+Version: 1.0.0.20211102
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-01 20:28:34
+LastEditTime: 2021-11-02 18:46:08
 '''
 """
 
@@ -223,12 +223,12 @@ class Experiment:
                 )
             )
 
-        # TODO: TSval, TSecr
+        # TODO: TSval, TSecr: some TCP full still wrong
         for s_eth in self.__S_ETHS:
             cmd = (
                 "cat "
                 + os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)
-                + "| sed 's/,\s*/,/g' | awk '{print $2,$3,$4,$5,$11}' > "
+                + "| sed 's/,\s*/,/g' | awk '{if (NR == 1) {print $2,$3,$4,$5,$11,$17,$18} else if (NR == 2) {print $2,$3,$4,$5,$11,$18,$19} else {print $2,$3,$4,$5,$11,$16,$17}}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE_FORMATTED
                 )
