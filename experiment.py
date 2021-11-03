@@ -5,7 +5,7 @@ Version: 1.0.0.20211103
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-03 17:38:33
+LastEditTime: 2021-11-03 17:55:58
 '''
 """
 
@@ -20,17 +20,13 @@ import os
 from mininet.log import error, info, warning
 from mininet.util import quietRun
 
-from eval import (
-    OUTPUT_BASE_DIR,
-    OUTPUT_FILE,
-    OUTPUT_FILE_FORMATTED,
-    plot_throughput,
-)
+from eval import OUTPUT_BASE_DIR, OUTPUT_FILE, OUTPUT_FILE_FORMATTED
 from errors import PoorPrepError
 from net import Net
 
 ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
+N_B_UNIT_DEFAULT = "G"
 
 
 class Experiment:
@@ -51,9 +47,9 @@ class Experiment:
         """
         self.__CLIENT = "client"  # The displayed name of the client in the outputs.
         self.__N_B_UNITS = {
-            0: "K",
-            1: "M",
-            2: "G",
+            0: "G",
+            1: "K",
+            2: "M",
         }  # The dictionary of the units of the number of bytes transferred from an iPerf client.
         self.__QDISC = [
             "codel",
@@ -209,30 +205,14 @@ class Experiment:
                 os.makedirs(output_dir)
 
     def __format_output(self) -> None:
-        """Format the output files."""
-        info("*** Formatting the output files\n")
+        """Format the Wireshark (TShark) output files."""
+        info("*** Formatting the Wireshark (TShark) output files\n")
 
-        for i in [0, 1]:
-            self.__mn.net.hosts[i].cmdPrint(
-                "cat "
-                + os.path.join(
-                    OUTPUT_BASE_DIR, self.__suboutput, f"h{i + 1}", OUTPUT_FILE
-                )
-                + "| grep sec | tr - ' ' | awk '{print $4,$8}' > "
-                + os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__suboutput,
-                    f"h{i + 1}",
-                    OUTPUT_FILE_FORMATTED,
-                )
-            )
-
-        # TODO: TSval, TSecr: some TCP full still wrong
         for s_eth in self.__S_ETHS:
             cmd = (
                 "cat "
                 + os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)
-                + "| sed 's/,\s*/,/g' | awk '{if (NR == 1) {print $2,$3,$4,$5,$11,$17,$18} else if (NR == 2) {print $2,$3,$4,$5,$11,$18,$19} else {print $2,$3,$4,$5,$11,$16,$17}}' > "
+                + "| sed 's/,\s*/,/g' | awk '{print $2,$3,$4,$5,$11}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE_FORMATTED
                 )
@@ -391,7 +371,7 @@ class Experiment:
         interval: int = 100,
         limit: int = 1000,
         n_b: int = 1,
-        n_b_unit: str = "G",
+        n_b_unit: str = N_B_UNIT_DEFAULT,
         perturb: int = 10,
         target: int = 5,
         tupdate: int = 15,
@@ -424,7 +404,7 @@ class Experiment:
         n_b : int, optional
             The number of bytes transferred from an iPerf client (the default is 1).
         n_b_unit : str, optional
-            The unit of the number of bytes transferred from an iPerf client (the default is the uppercase "G", and "K" and "M" are the other accepted values).
+            The unit of the number of bytes transferred from an iPerf client (the default is defined by a constant "N_B_UNIT_DEFAULT", and the value should be one of the uppercases "G", "K", and "M").
         perturb : int, optional
             The interval in seconds for the queue algorithm perturbation in SFQ (the default is 10).
         target : int, optional
@@ -439,6 +419,7 @@ class Experiment:
             BDP is not set. Check the call to the function `set_bdp()` before this function.
         """
         bw_unit = self.__check_bw_unit(bw_unit=bw_unit)
+        n_b_unit = n_b_unit.strip()
 
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
@@ -448,6 +429,12 @@ class Experiment:
             beta = BETA_DEFAULT
             warning(
                 "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
+            )
+
+        if n_b_unit not in self.__N_B_UNITS.values():
+            n_b_unit = N_B_UNIT_DEFAULT
+            warning(
+                "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
             )
 
         info(f"****** Starting the experiment: {name}\n")
@@ -498,8 +485,6 @@ class Experiment:
             "killall -9 iperf"
         )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
-        # TODO: plot_rtt(suboutput=self.__suboutput)
-        plot_throughput(suboutput=self.__suboutput)
         self.__mn.stop()
         info("\n")
 
