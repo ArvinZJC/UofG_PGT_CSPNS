@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211102
+Version: 1.0.0.20211103
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-02 18:46:08
+LastEditTime: 2021-11-03 17:38:33
 '''
 """
 
@@ -24,7 +24,6 @@ from eval import (
     OUTPUT_BASE_DIR,
     OUTPUT_FILE,
     OUTPUT_FILE_FORMATTED,
-    plot_rtt,
     plot_throughput,
 )
 from errors import PoorPrepError
@@ -51,6 +50,11 @@ class Experiment:
             The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
         """
         self.__CLIENT = "client"  # The displayed name of the client in the outputs.
+        self.__N_B_UNITS = {
+            0: "K",
+            1: "M",
+            2: "G",
+        }  # The dictionary of the units of the number of bytes transferred from an iPerf client.
         self.__QDISC = [
             "codel",
             "pie",
@@ -236,24 +240,26 @@ class Experiment:
             info(f'*** {s_eth} : ("{cmd}")\n')
             check_call(cmd, shell=True)
 
-    def __iperf_client(self, client_idx: int, time: int) -> None:
+    def __iperf_client(self, client_idx: int, n_b: int, n_b_unit_idx: int) -> None:
         """A multiprocessing task to run an iPerf client.
 
         Parameters
         ----------
         client_idx : int
             The index of the client host.
-        time : int
-            The time in seconds for running an iPerf client.
+        n_b : int
+            The number of bytes transferred from an iPerf client.
+        n_b_unit_idx : int
+            The index of the unit of the number of bytes transferred from an iPerf client.
         """
         cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -i 1 -t {time} > "
+            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)} > "
             + os.path.join(
                 OUTPUT_BASE_DIR, self.__suboutput, f"h{client_idx + 1}", OUTPUT_FILE
             )
         )
         info(f'*** h{client_idx + 1} : ("{cmd}")\n')
-        info(f"It starts at {datetime.now()} and should last for {time} second(s).\n")
+        info(f"It starts at {datetime.now()}.\n")
         self.__mn.net.hosts[client_idx].cmd(cmd)
 
     def __launch_servers(self) -> None:
@@ -270,20 +276,31 @@ class Experiment:
                 + " &"
             )  # Add "&" in the end to run in the background.
 
-    def __run_clients(self, time: int) -> None:
+    def __run_clients(self, n_b: int, n_b_unit: str) -> None:
         """Run iPerf clients almost simultaneously.
 
         Parameters
         ----------
-        time : int
-            The time in seconds for running an iPerf client.
+        n_b : int
+            The number of bytes transferred from an iPerf client.
+        n_b_unit : str
+            The unit of the number of bytes transferred from an iPerf client.
         """
         info("*** Running iPerf clients almost simultaneously\n")
         processes = []
 
         # h1 and h2.
         for i in [0, 1]:
-            process = Process(target=self.__iperf_client, args=(i, time))
+            process = Process(
+                target=self.__iperf_client,
+                args=(
+                    i,
+                    n_b,
+                    list(self.__N_B_UNITS.keys())[
+                        list(self.__N_B_UNITS.values()).index(n_b_unit)
+                    ],
+                ),
+            )
             processes.append(process)
             process.start()
 
@@ -373,9 +390,10 @@ class Experiment:
         has_clean_lab: bool = False,
         interval: int = 100,
         limit: int = 1000,
+        n_b: int = 1,
+        n_b_unit: str = "G",
         perturb: int = 10,
         target: int = 5,
-        time: int = 30,
         tupdate: int = 15,
     ) -> None:
         """Do an experiment.
@@ -403,13 +421,15 @@ class Experiment:
         limit : int, optional
             For CoDel and PIE, the limit on the queue size in packets (the default is 1000).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is not for this case).
+        n_b : int, optional
+            The number of bytes transferred from an iPerf client (the default is 1).
+        n_b_unit : str, optional
+            The unit of the number of bytes transferred from an iPerf client (the default is the uppercase "G", and "K" and "M" are the other accepted values).
         perturb : int, optional
             The interval in seconds for the queue algorithm perturbation in SFQ (the default is 10).
         target : int, optional
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
-        time : int, optional
-            The time in seconds for running an iPerf client (the default is 30).
         tupdate : int, optional
             The frequency in milliseconds for PIE at which the system drop probability is calculated (the default is 15).
 
@@ -470,7 +490,7 @@ class Experiment:
         self.__create_output_dir()
         self.__run_wireshark()
         self.__launch_servers()
-        self.__run_clients(time=time)
+        self.__run_clients(n_b=n_b, n_b_unit=n_b_unit)
         quietRun(
             "killall -15 tshark"
         )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
