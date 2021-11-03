@@ -5,7 +5,7 @@ Version: 1.0.0.20211103
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-03 17:55:58
+LastEditTime: 2021-11-03 20:55:14
 '''
 """
 
@@ -45,6 +45,9 @@ class Experiment:
         ValueError
             The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
         """
+        self.__CAPTURE_FILE = (
+            "result.pcapng"  # The filename with the file extension of the capture file.
+        )
         self.__CLIENT = "client"  # The displayed name of the client in the outputs.
         self.__N_B_UNITS = {
             0: "G",
@@ -209,16 +212,19 @@ class Experiment:
         info("*** Formatting the Wireshark (TShark) output files\n")
 
         for s_eth in self.__S_ETHS:
-            cmd = (
+            cmds = [
+                f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)}",
                 "cat "
                 + os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)
                 + "| sed 's/,\s*/,/g' | awk '{print $2,$3,$4,$5,$11}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE_FORMATTED
-                )
-            )
-            info(f'*** {s_eth} : ("{cmd}")\n')
-            check_call(cmd, shell=True)
+                ),
+            ]
+
+            for cmd in cmds:
+                info(f'*** {s_eth} : ("{cmd}")\n')
+                check_call(cmd, shell=True)
 
     def __iperf_client(self, client_idx: int, n_b: int, n_b_unit_idx: int) -> None:
         """A multiprocessing task to run an iPerf client.
@@ -343,10 +349,10 @@ class Experiment:
             The index of a switch's interface for TCP traffic capture.
         """
         s_eth = f"s2-eth{s_eth_idx}"
-        cmd = f"tshark -f 'tcp' -i {s_eth} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)} &"
+        cmd = f"tshark -f 'tcp' -i {s_eth} -w {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
         info(f'*** {s_eth} : ("{cmd}")\n')
-        check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
         info(f"It starts at {datetime.now()}.\n")
+        check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
 
     def clear_output(self) -> None:
         """Clear the output directory."""
