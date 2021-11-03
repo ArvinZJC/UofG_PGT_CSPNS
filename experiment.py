@@ -5,7 +5,7 @@ Version: 1.0.0.20211103
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-03 20:55:14
+LastEditTime: 2021-11-03 22:46:18
 '''
 """
 
@@ -20,7 +20,6 @@ import os
 from mininet.log import error, info, warning
 from mininet.util import quietRun
 
-from eval import OUTPUT_BASE_DIR, OUTPUT_FILE, OUTPUT_FILE_FORMATTED
 from errors import PoorPrepError
 from net import Net
 
@@ -54,6 +53,11 @@ class Experiment:
             1: "K",
             2: "M",
         }  # The dictionary of the units of the number of bytes transferred from an iPerf client.
+        self.__OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
+        self.__OUTPUT_FILE = (
+            "result.txt"  # The filename with the file extension of the output file.
+        )
+        self.__OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
         self.__QDISC = [
             "codel",
             "pie",
@@ -65,6 +69,9 @@ class Experiment:
             "s2-eth1",
             "s2-eth2",
         ]  # A list of the switch's interfaces for TCP traffic capture.
+        self.__SUMMARY_FILE = (
+            "summary.txt"  # The filename with the file extension of the summary file.
+        )
         self.__bdp = None
         self.__mn = Net()
 
@@ -108,7 +115,7 @@ class Experiment:
         interval : int
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
-            For CoDel and PIE, the limit on the queue size in packets.
+            For CoDel, RED, and PIE, the limit on the queue size in packets.
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
         perturb : int
             The interval in seconds for the queue algorithm perturbation in SFQ.
@@ -160,10 +167,9 @@ class Experiment:
                 cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
             elif qdisc == "red":
                 # Reference: https://man7.org/linux/man-pages/man8/tc-red.8.html
-                max = int(limit / 4)
-                min = int(max / 3)
-                burst = int((2 * min + max) / (3 * avpkt))
-                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {burst} limit {limit} max {max} min {min}"
+                max = round(limit / 4)
+                burst = round((2 * round(max / 3) + max) / (3 * avpkt))
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {1 if burst <= 0 else burst} limit {limit}"
             else:
                 cmd += f"perturb {perturb}"
 
@@ -202,7 +208,7 @@ class Experiment:
         sections.extend(self.__S_ETHS)
 
         for section in sections:
-            output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, section)
+            output_dir = os.path.join(self.__OUTPUT_BASE_DIR, self.__suboutput, section)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -213,12 +219,14 @@ class Experiment:
 
         for s_eth in self.__S_ETHS:
             cmds = [
-                f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)}",
-                "cat "
-                + os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE)
-                + "| sed 's/,\s*/,/g' | awk '{print $2,$3,$4,$5,$11}' > "
+                f"tshark -r {os.path.join(self.__OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(self.__OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}",
+                f"tail -1 {os.path.join(self.__OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}"
+                + " | awk '{print $2}' > "
                 + os.path.join(
-                    OUTPUT_BASE_DIR, self.__suboutput, s_eth, OUTPUT_FILE_FORMATTED
+                    self.__OUTPUT_BASE_DIR,
+                    self.__suboutput,
+                    s_eth,
+                    self.__OUTPUT_FILE_FORMATTED,
                 ),
             ]
 
@@ -238,14 +246,13 @@ class Experiment:
         n_b_unit_idx : int
             The index of the unit of the number of bytes transferred from an iPerf client.
         """
-        cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)} > "
-            + os.path.join(
-                OUTPUT_BASE_DIR, self.__suboutput, f"h{client_idx + 1}", OUTPUT_FILE
-            )
+        cmd = f"iperf -c {self.__mn.net.hosts[client_idx + 2].IP()} -n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)} > " + os.path.join(
+            self.__OUTPUT_BASE_DIR,
+            self.__suboutput,
+            f"h{client_idx + 1}",
+            self.__OUTPUT_FILE,
         )
-        info(f'*** h{client_idx + 1} : ("{cmd}")\n')
-        info(f"It starts at {datetime.now()}.\n")
+        info(f'*** h{client_idx + 1} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         self.__mn.net.hosts[client_idx].cmd(cmd)
 
     def __launch_servers(self) -> None:
@@ -257,7 +264,10 @@ class Experiment:
             self.__mn.net.hosts[i].cmdPrint(
                 "iperf -i 1 -s > "
                 + os.path.join(
-                    OUTPUT_BASE_DIR, self.__suboutput, f"h{i + 1}", OUTPUT_FILE
+                    self.__OUTPUT_BASE_DIR,
+                    self.__suboutput,
+                    f"h{i + 1}",
+                    self.__OUTPUT_FILE,
                 )
                 + " &"
             )  # Add "&" in the end to run in the background.
@@ -340,6 +350,44 @@ class Experiment:
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
 
+    def __summarise(self, n_b: int, n_b_unit: str) -> None:
+        """Summarise the throughput and the flow completion time (FCT) for each relevant switch's interface in the summary file.
+
+        Parameters
+        ----------
+        n_b : int
+            The number of bytes transferred from an iPerf client.
+        n_b_unit : str
+            The unit of the number of bytes transferred from an iPerf client.
+        """
+        info(
+            "*** Summarising the throughput and the FCT for each relevant switch's interface in the summary file\n"
+        )
+        summary = self.__suboutput
+
+        for s_eth in self.__S_ETHS:
+            with open(
+                os.path.join(
+                    self.__OUTPUT_BASE_DIR,
+                    self.__suboutput,
+                    s_eth,
+                    self.__OUTPUT_FILE_FORMATTED,
+                )
+            ) as f:
+                fct = f.readline().strip()
+
+            if n_b_unit == N_B_UNIT_DEFAULT:
+                volume = n_b * 1024 * 8  # GB => Mbit
+            elif n_b_unit == "K":
+                volume = n_b / 1024 * 8  # KB => Mbit
+            else:
+                volume = n_b * 8  # MB => Mbit
+
+            summary += f" {str(round(volume / float(fct)))} {fct}"
+
+        with open(os.path.join(self.__OUTPUT_BASE_DIR, self.__SUMMARY_FILE), "a") as f:
+            f.write(summary + "\n")
+
     def __wireshark(self, s_eth_idx: int) -> None:
         """A multiprocessing task to run Wireshark (TShark).
 
@@ -349,16 +397,15 @@ class Experiment:
             The index of a switch's interface for TCP traffic capture.
         """
         s_eth = f"s2-eth{s_eth_idx}"
-        cmd = f"tshark -f 'tcp' -i {s_eth} -w {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
-        info(f'*** {s_eth} : ("{cmd}")\n')
-        info(f"It starts at {datetime.now()}.\n")
+        cmd = f"tshark -f 'tcp' -i {s_eth} -w {os.path.join(self.__OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
+        info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
 
     def clear_output(self) -> None:
         """Clear the output directory."""
         try:
-            if os.path.isdir(OUTPUT_BASE_DIR):
-                rmtree(path=OUTPUT_BASE_DIR)
+            if os.path.isdir(self.__OUTPUT_BASE_DIR):
+                rmtree(path=self.__OUTPUT_BASE_DIR)
                 info("*** Clearing the output directory\n")
         except Exception as e:
             error(str(e) + "\n")
@@ -405,7 +452,7 @@ class Experiment:
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
-            For CoDel and PIE, the limit on the queue size in packets (the default is 1000).
+            For CoDel, RED, and PIE, the limit on the queue size in packets (the default is 1000).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is not for this case).
         n_b : int, optional
             The number of bytes transferred from an iPerf client (the default is 1).
@@ -491,6 +538,7 @@ class Experiment:
             "killall -9 iperf"
         )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
+        self.__summarise(n_b=n_b, n_b_unit=n_b_unit)
         self.__mn.stop()
         info("\n")
 

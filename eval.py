@@ -5,7 +5,7 @@ Version: 1.0.0.20211103
 Author: Arvin Zhao
 Date: 2021-10-19 15:22:06
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-03 20:39:43
+LastEditTime: 2021-11-03 21:20:22
 '''
 """
 
@@ -16,9 +16,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 HOST_NUMS = [1, 2]  # A list of host numbers.
-OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
-OUTPUT_FILE = "result.txt"  # The filename with the file extension of the output file.
-OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
 
 
 def import_output(category: str, suboutput: str) -> pd.DataFrame:
