@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211104
+Version: 1.0.0.20211107
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-04 21:46:14
+LastEditTime: 2021-11-07 18:09:48
 '''
 """
 
@@ -35,11 +35,13 @@ SUMMARY_FILE = (
 class Experiment:
     """The class for defining the utilities of the experiment settings."""
 
-    def __init__(self, rtt: int = 20) -> None:
+    def __init__(self, has_capture: bool = False, rtt: int = 20) -> None:
         """The constructor of the class for defining the utilities of the experiment settings.
 
         Parameters
         ----------
+        has_capture : bool, optional
+            A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`).
         rtt : int, optional
             The round-trip time (RTT) latency in milliseconds (the default is 20).
 
@@ -73,6 +75,7 @@ class Experiment:
             "s2-eth2",
         ]  # A list of the switch's interfaces for TCP traffic capture.
         self.__bdp = None
+        self.__has_capture = has_capture
         self.__mn = Net()
 
         # No longer than the max time value of the Linux command `tc`.
@@ -220,8 +223,14 @@ class Experiment:
         info("*** Formatting the Wireshark (TShark) output files\n")
 
         for s_eth in self.__S_ETHS:
-            cmds = [
-                f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}",
+            cmds = (
+                [
+                    f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}"
+                ]
+                if self.__has_capture
+                else []
+            )
+            cmds.append(
                 f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}"
                 + " | awk '{print $2}' > "
                 + os.path.join(
@@ -229,8 +238,8 @@ class Experiment:
                     self.__suboutput,
                     s_eth,
                     self.__OUTPUT_FILE_FORMATTED,
-                ),
-            ]
+                )
+            )
 
             for cmd in cmds:
                 info(f'*** {s_eth} : ("{cmd}")\n')
@@ -401,7 +410,11 @@ class Experiment:
             The index of a switch's interface for TCP traffic capture.
         """
         s_eth = f"s2-eth{s_eth_idx}"
-        cmd = f"tshark -f 'tcp' -i {s_eth} -w {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
+        cmd = f"tshark -f 'tcp' -i {s_eth} " + (
+            f"-w {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
+            if self.__has_capture
+            else f"> {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)} &"
+        )
         info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
 
