@@ -5,7 +5,7 @@ Version: 1.0.0.20211109
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-09 12:15:23
+LastEditTime: 2021-11-09 17:34:46
 '''
 """
 
@@ -442,7 +442,7 @@ class Experiment:
         limit: int = None,
         n_b: int = 1,
         n_b_unit: str = N_B_UNIT_DEFAULT,
-        perturb: int = 10,
+        perturb: int = 60,
         target: int = 5,
         tupdate: int = 15,
     ) -> None:
@@ -470,7 +470,7 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
             The default is `None`.
-            For CoDel and PIE, the limit on the queue size in packets (the default is 1000 in the logic).
+            For CoDel and PIE, the limit on the queue size in packets (the default is related to 10*BDP in the logic).
             For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
         n_b : int, optional
@@ -478,7 +478,7 @@ class Experiment:
         n_b_unit : str, optional
             The unit of the number of bytes transferred from an iPerf client (the default is defined by a constant "N_B_UNIT_DEFAULT", and the value should be one of the uppercases "G", "K", and "M").
         perturb : int, optional
-            The interval in seconds for the queue algorithm perturbation in SFQ (the default is 10).
+            The interval in seconds for the queue algorithm perturbation in SFQ (the default is 60).
         target : int, optional
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
@@ -535,7 +535,9 @@ class Experiment:
                     if aqm == "red":
                         limit = 10 * self.__bdp
                     else:
-                        limit = 1000
+                        limit = round(
+                            10 * self.__bdp / 1500
+                        )  # A TCP packet holds 1500 bytes of data at most.
 
                 self.__apply_qdisc(
                     alpha=alpha,
