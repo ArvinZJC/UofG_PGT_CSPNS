@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211107
+Version: 1.0.0.20211109
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-07 18:09:48
+LastEditTime: 2021-11-09 12:15:23
 '''
 """
 
@@ -173,8 +173,8 @@ class Experiment:
                 # References:
                 # 1. https://man7.org/linux/man-pages/man8/tc-red.8.html
                 # 2. http://www.fifi.org/doc/HOWTO/en-html/Adv-Routing-HOWTO-14.html - Section 14.5
-                min = ceil(floor(limit / 4) / 3)
-                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min / avpkt)} limit {limit}"
+                min_size = ceil(floor(limit / 4) / 3)
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} limit {limit}"
             else:
                 cmd += f"perturb {perturb}"
 
