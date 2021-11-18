@@ -5,7 +5,7 @@ Version: 2.0.0.20211118
 Author: Arvin Zhao
 Date: 2021-11-18 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-18 16:35:16
+LastEditTime: 2021-11-18 23:04:01
 '''
 """
 
@@ -42,7 +42,7 @@ class DumbbellTopo(Topo):
         # Add 2 switches: the left for the sources and the right for the destinations.
         s1 = self.addSwitch(name="s1")
         s2 = self.addSwitch(name="s2")
-        self.addLink(s1, s2, cls=TCLink, bw=bw, delay=f"{delay}ms")
+        self.addLink(s1, s2, cls=TCLink, bw=bw, delay=f"{delay}ms", use_tbf=True)
 
         # Add the hosts on each side.
         for i in range(n):
