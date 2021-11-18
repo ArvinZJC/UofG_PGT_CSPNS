@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 1.0.0.20211109
+Version: 1.0.0.20211118
 Author: Arvin Zhao
 Date: 2021-10-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-09 17:34:46
+LastEditTime: 2021-11-18 16:10:15
 '''
 """
 
@@ -509,7 +509,7 @@ class Experiment:
                 "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
             )
 
-        info(f"****** Starting the experiment: {name}\n")
+        info(f"*** Starting the experiment: {name}\n")
         self.__mn.start(has_clean_lab=has_clean_lab)
         self.__set_delay()
         self.__set_host_buffer()
