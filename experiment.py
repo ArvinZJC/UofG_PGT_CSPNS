@@ -5,7 +5,7 @@ Version: 2.0.0.20211119
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-19 17:31:28
+LastEditTime: 2021-11-19 19:36:53
 '''
 """
 
@@ -68,10 +68,11 @@ class Experiment:
             "tbf",
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
+        self.__group = None  # The output folder name using the experiment group name.
         self.__has_capture = has_capture
         self.__mn = Net()
         self.__n_hosts = 0  # The number of hosts.
-        self.__suboutput = None  # The output folder name of an experiment group.
+        self.__name = None  # The output folder name using the experiment name.
 
     def __apply_qdisc(
         self,
@@ -178,7 +179,9 @@ class Experiment:
         sections.extend([f"s1-eth{i + 2}" for i in range(int(self.__n_hosts / 2))])
 
         for section in sections:
-            output_dir = os.path.join(OUTPUT_BASE_DIR, self.__suboutput, section)
+            output_dir = os.path.join(
+                OUTPUT_BASE_DIR, self.__group, self.__name, section
+            )
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -191,21 +194,22 @@ class Experiment:
             s_eth = f"s1-eth{i + 2}"
             cmds = (
                 [
-                    f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}"
+                    f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
                 ]
                 if self.__has_capture
                 else []
             )
             cmds.append(
-                f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)}"
+                f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
                 + " | awk '{print $2}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR,
-                    self.__suboutput,
+                    self.__group,
+                    self.__name,
                     s_eth,
                     self.__OUTPUT_FILE_FORMATTED,
                 )
-            )
+            )  # TODO: sometimes read nothing when no capture files.
 
             for cmd in cmds:
                 info(f'*** {s_eth} : ("{cmd}")\n')
@@ -225,7 +229,8 @@ class Experiment:
         """
         cmd = f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)} > " + os.path.join(
             OUTPUT_BASE_DIR,
-            self.__suboutput,
+            self.__group,
+            self.__name,
             f"hl{client_idx + 1}",
             self.__OUTPUT_FILE,
         )
@@ -241,7 +246,8 @@ class Experiment:
                 "iperf -i 1 -s > "
                 + os.path.join(
                     OUTPUT_BASE_DIR,
-                    self.__suboutput,
+                    self.__group,
+                    self.__name,
                     f"hr{i - int(self.__n_hosts / 2) + 1}",
                     self.__OUTPUT_FILE,
                 )
@@ -344,7 +350,8 @@ class Experiment:
             with open(
                 os.path.join(
                     OUTPUT_BASE_DIR,
-                    self.__suboutput,
+                    self.__group,
+                    self.__name,
                     f"s1-eth{i + 2}",
                     self.__OUTPUT_FILE_FORMATTED,
                 )
@@ -358,9 +365,9 @@ class Experiment:
             else:
                 volume = n_b * 8  # MB => Mbit
 
-            summary += f" {fct} {str(round(volume / float(fct)))}"
+            summary += f" {fct} {str(round(volume / float(fct)))}"  # TODO: throughput may be useless for fairness.
 
-        with open(os.path.join(OUTPUT_BASE_DIR, SUMMARY_FILE), "a") as f:
+        with open(os.path.join(OUTPUT_BASE_DIR, self.__group, SUMMARY_FILE), "a") as f:
             f.write(summary + "\n")
 
     def __wireshark(self, s_eth_idx: int) -> None:
@@ -373,9 +380,9 @@ class Experiment:
         """
         s_eth = f"s1-eth{s_eth_idx}"
         cmd = f"tshark -f 'tcp' -i {s_eth} " + (
-            f"-w {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__CAPTURE_FILE)} &"
+            f"-w {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__CAPTURE_FILE)} &"
             if self.__has_capture
-            else f"> {os.path.join(OUTPUT_BASE_DIR, self.__suboutput, s_eth, self.__OUTPUT_FILE)} &"
+            else f"> {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)} &"
         )
         info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
@@ -392,6 +399,7 @@ class Experiment:
 
     def do(
         self,
+        group: str,
         name: str,
         alpha: int = ALPHA_DEFAULT,
         avpkt: int = 1000,
@@ -414,6 +422,8 @@ class Experiment:
 
         Parameters
         ----------
+        group : str
+            The experiment group.
         name : str
             The experiment name.
         alpha : int, optional
@@ -477,7 +487,8 @@ class Experiment:
                 "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
             )
 
-        info(f"*** Starting the experiment: {name}\n")
+        info(f"*** Starting the experiment: {group} - {name}\n")
+        self.__group = group
         self.__mn.start(has_clean_lab=has_clean_lab, n=n)
         self.__n_hosts = len(self.__mn.net.hosts)
         self.__set_host_buffer()
@@ -494,7 +505,7 @@ class Experiment:
             tupdate=tupdate,
         )  # Apply TBF.
         self.__set_delay(delay=delay)
-        self.__suboutput = "baseline"
+        self.__name = name
 
         if aqm is not None:
             aqm = aqm.lower().strip()
@@ -521,7 +532,7 @@ class Experiment:
                     target=target,
                     tupdate=tupdate,
                 )
-                self.__suboutput = aqm
+                self.__name = aqm
 
         self.__create_output_dir()
         self.__run_wireshark()
