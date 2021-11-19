@@ -1,16 +1,15 @@
 """
 '''
 Description: the utilities of the simulation dumbbell network for experiments
-Version: 2.0.0.20211118
+Version: 2.0.0.20211119
 Author: Arvin Zhao
 Date: 2021-11-18 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-18 23:04:01
+LastEditTime: 2021-11-19 16:00:54
 '''
 """
 
 from mininet.clean import cleanup
-from mininet.link import TCLink
 from mininet.log import info
 from mininet.net import Mininet
 from mininet.topo import Topo
@@ -22,27 +21,18 @@ from errors import PoorPrepError
 class DumbbellTopo(Topo):
     """The class for defining a dumbbell topology."""
 
-    def build(self, bw: int, bw_unit: str, delay: int, n: int) -> None:
+    def build(self, n: int) -> None:
         """Build up a dumbbell topology.
 
         Parameters
         ----------
-        bw : int
-            The bandwidth of the bottleneck.
-        bw_unit : str
-            The bandwidth unit.
-        delay : int
-            The latency of the bottleneck link in milliseconds.
         n : int
             The number of the hosts on each side of the dumbbell topology.
         """
-        if check_bw_unit(bw_unit=bw_unit) == "gbit":
-            bw *= 1000
-
         # Add 2 switches: the left for the sources and the right for the destinations.
         s1 = self.addSwitch(name="s1")
         s2 = self.addSwitch(name="s2")
-        self.addLink(s1, s2, cls=TCLink, bw=bw, delay=f"{delay}ms", use_tbf=True)
+        self.addLink(s1, s2)
 
         # Add the hosts on each side.
         for i in range(n):
@@ -59,20 +49,11 @@ class Net:
         """The constructor of the class for defining the utilities of the simulation dumbbell network for experiments."""
         self.net = None  # Type: Mininet
 
-    def start(
-        self,
-        bw: int = 1,
-        bw_unit: str = "gbit",
-        delay: int = 20,
-        has_clean_lab: bool = False,
-        n: int = 2,
-    ) -> None:
+    def start(self, has_clean_lab: bool = False, n: int = 2) -> None:
         """Start the simulation dumbbell network and test its connectivity.
 
         Parameters
         ----------
-        delay : int, optional
-            The latency of the bottleneck link in milliseconds (the default is 20).
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation dumbbell network (the default is `False`).
         n : int, optional
@@ -81,11 +62,7 @@ class Net:
         if has_clean_lab:
             cleanup()
 
-        self.net = Mininet(
-            topo=DumbbellTopo(
-                bw=bw, bw_unit=check_bw_unit(bw_unit=bw_unit), delay=delay, n=n
-            )
-        )
+        self.net = Mininet(topo=DumbbellTopo(n=n))
         self.net.start()
         info("*** Dumping connections\n")
         dumpNodeConnections(self.net.switches)

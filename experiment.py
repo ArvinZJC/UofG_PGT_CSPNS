@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiment settings
-Version: 2.0.0.20211118
+Version: 2.0.0.20211119
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-18 22:58:15
+LastEditTime: 2021-11-19 17:31:28
 '''
 """
 
@@ -13,7 +13,7 @@ from datetime import datetime
 from math import ceil, floor
 from multiprocessing import Process
 from shutil import rmtree
-from subprocess import check_call, DEVNULL, STDOUT
+from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
 from time import sleep
 import os
 
@@ -42,7 +42,6 @@ class Experiment:
         ----------
         has_capture : bool, optional
             A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`).
-
         Raises
         ------
         ValueError
@@ -66,6 +65,7 @@ class Experiment:
             "pie",
             "red",
             "sfq",
+            "tbf",
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__has_capture = has_capture
@@ -83,13 +83,13 @@ class Experiment:
         interval: int,
         limit: int,
         perturb: int,
-        qdisc: str,
         target: int,
         tupdate: int,
+        qdisc: str = "tbf",
     ) -> None:
         """Apply a classless queueing discipline.
 
-        Support Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Random Early Detection (RED), and Proportional Integral Controller-Enhanced (PIE).
+        Support Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Random Early Detection (RED), Token Bucket Filter (TBF), and Proportional Integral Controller-Enhanced (PIE).
 
         Parameters
         ----------
@@ -108,6 +108,7 @@ class Experiment:
         limit : int
             For CoDel and PIE, the limit on the queue size in packets.
             For RED, the limit on the queue size in bytes.
+            For TBF, the number of bytes that can be queued waiting for tokens to become available.
         perturb : int
             The interval in seconds for the queue algorithm perturbation in SFQ.
         qdisc : str
@@ -117,6 +118,8 @@ class Experiment:
             For PIE, the expected queue delay in milliseconds.
         tupdate : int
             The frequency in milliseconds for PIE at which the system drop probability is calculated.
+        qdisc : str, optional
+            A classless queueing discipline (the default is "tbf").
 
         Raises
         ------
@@ -129,20 +132,41 @@ class Experiment:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
-        cmd = f"tc qdisc add dev s1-eth1 parent 10:1 handle 11: {qdisc} "  # TODO: Apply the discipline on s1-eth1 to affect the bottleneck link.
+        cmd = "tc qdisc add dev s1-eth1 "
 
-        if qdisc == "codel":
-            cmd += f"limit {limit} interval {interval}ms target {target}ms"
-        elif qdisc == "pie":
-            cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
-        elif qdisc == "red":
-            # References:
-            # 1. https://man7.org/linux/man-pages/man8/tc-red.8.html
-            # 2. http://www.fifi.org/doc/HOWTO/en-html/Adv-Routing-HOWTO-14.html - Section 14.5
-            min_size = ceil(floor(limit / 4) / 3)
-            cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} limit {limit}"
+        if qdisc == "tbf":
+            hz = int(
+                Popen(
+                    "egrep '^CONFIG_HZ_[0-9]+' /boot/config-`uname -r`",
+                    shell=True,
+                    stdout=PIPE,
+                )
+                .stdout.read()
+                .decode()
+                .replace("CONFIG_HZ_", "")
+                .replace("=y\n", "")
+            )
+            burst = int(
+                bw * (1000000000 if bw_unit == "gbit" else 1000000) / hz / 8
+            )  # Reference: https://unix.stackexchange.com/a/100797
+            cmd += (
+                f"root handle 1: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
+            )
         else:
-            cmd += f"perturb {perturb}"
+            cmd += f"parent 1: handle 2: {qdisc} "
+
+            if qdisc == "codel":
+                cmd += f"limit {limit} interval {interval}ms target {target}ms"
+            elif qdisc == "pie":
+                cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
+            elif qdisc == "red":
+                # References:
+                # 1. https://man7.org/linux/man-pages/man8/tc-red.8.html
+                # 2. http://www.fifi.org/doc/HOWTO/en-html/Adv-Routing-HOWTO-14.html - Section 14.5
+                min_size = ceil(floor(limit / 4) / 3)
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} limit {limit}"
+            else:
+                cmd += f"perturb {perturb}"
 
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
@@ -269,6 +293,24 @@ class Experiment:
 
         sleep(1)  # Wait for 1 second to ensure full capture.
 
+    def __set_delay(self, delay: int) -> None:
+        """Emulate high-latency WAN.
+
+        Parameters
+        ----------
+        delay : int
+            The latency in milliseconds.
+
+        Raises
+        ------
+        BadCmdError
+            The executed command fails, so the delay cannot be set. Check the command.
+        """
+        info("*** Emulating high-latency WAN\n")
+        cmd = f"tc qdisc add dev s2-eth1 root netem delay {delay}ms"
+        info(f'*** {self.__CLIENT} : ("{cmd}")\n')
+        check_call(cmd, shell=True)
+
     def __set_host_buffer(self) -> None:
         """Set the hosts' buffer size."""
         info("*** Setting the hosts' buffer size\n")
@@ -357,9 +399,11 @@ class Experiment:
         beta: int = BETA_DEFAULT,
         bw: int = 1,
         bw_unit: str = "gbit",
+        delay: int = 20,
         has_clean_lab: bool = False,
         interval: int = 100,
         limit: int = None,
+        n: int = 2,
         n_b: int = 512,
         n_b_unit: str = N_B_UNIT_DEFAULT,
         perturb: int = 60,
@@ -384,6 +428,8 @@ class Experiment:
             The bandwidth (the default is 1).
         bw_unit : str, optional
             The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
+        delay : int, optional
+            The latency in milliseconds (the default is 20).
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation network (the default is `False`).
         interval : int, optional
@@ -392,6 +438,9 @@ class Experiment:
             The default is `None`.
             For CoDel and PIE, the limit on the queue size in packets (the default is related to 10*BDP in the logic).
             For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
+            For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
+        n : int, optional
+            The number of the hosts on each side of the dumbbell topology (the default is 2).
         n_b : int, optional
             The number of bytes transferred from an iPerf client (the default is 1).
         n_b_unit : str, optional
@@ -429,36 +478,50 @@ class Experiment:
             )
 
         info(f"*** Starting the experiment: {name}\n")
-        self.__mn.start(has_clean_lab=has_clean_lab)
+        self.__mn.start(has_clean_lab=has_clean_lab, n=n)
         self.__n_hosts = len(self.__mn.net.hosts)
         self.__set_host_buffer()
+        self.__apply_qdisc(
+            alpha=alpha,
+            avpkt=avpkt,
+            beta=beta,
+            bw=bw,
+            bw_unit=bw_unit,
+            interval=interval,
+            limit=10 * self.__bdp if limit is None else limit,
+            perturb=perturb,
+            target=target,
+            tupdate=tupdate,
+        )  # Apply TBF.
+        self.__set_delay(delay=delay)
         self.__suboutput = "baseline"
 
         if aqm is not None:
             aqm = aqm.lower().strip()
 
-            if limit is None:
-                if aqm == "red":
-                    limit = 10 * self.__bdp
-                else:
-                    limit = round(
-                        10 * self.__bdp / 1500
-                    )  # A TCP packet holds 1500 bytes of data at most.
+            if aqm != "tbf":
+                if limit is None:
+                    if aqm == "red":
+                        limit = 10 * self.__bdp
+                    else:
+                        limit = round(
+                            10 * self.__bdp / 1500
+                        )  # A TCP packet holds 1500 bytes of data at most.
 
-            self.__apply_qdisc(
-                alpha=alpha,
-                avpkt=avpkt,
-                beta=beta,
-                bw=bw,
-                bw_unit=bw_unit,
-                interval=interval,
-                limit=limit,
-                perturb=perturb,
-                qdisc=aqm,
-                target=target,
-                tupdate=tupdate,
-            )
-            self.__suboutput = aqm
+                self.__apply_qdisc(
+                    alpha=alpha,
+                    avpkt=avpkt,
+                    beta=beta,
+                    bw=bw,
+                    bw_unit=bw_unit,
+                    interval=interval,
+                    limit=limit,
+                    perturb=perturb,
+                    qdisc=aqm,
+                    target=target,
+                    tupdate=tupdate,
+                )
+                self.__suboutput = aqm
 
         self.__create_output_dir()
         self.__run_wireshark()
