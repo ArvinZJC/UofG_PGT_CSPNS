@@ -5,7 +5,7 @@ Version: 2.0.0.20211120
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-20 18:06:14
+LastEditTime: 2021-11-20 18:17:19
 '''
 """
 
@@ -202,7 +202,7 @@ class Experiment:
                     f"hl{i + 1}",
                     self.__OUTPUT_FILE,
                 )
-                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$14,$15}' > "
+                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$14}' > "
                 + os.path.join(
                     OUTPUT_BASE_DIR,
                     self.__group,
