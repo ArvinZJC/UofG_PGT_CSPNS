@@ -5,7 +5,7 @@ Version: 2.0.0.20211120
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-20 16:51:42
+LastEditTime: 2021-11-20 18:06:14
 '''
 """
 
@@ -178,6 +178,16 @@ class Experiment:
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
 
+    def __differentiate(self) -> None:
+        """Differentiate flows to simulate different dynamic sharing the same bottleneck link."""
+        info("*** Differentiating flows\n")
+
+        for i in range(int(self.__n_hosts / 2)):
+            if (i + 1) % 2 == 0:
+                self.__mn.net.hosts[i].cmdPrint(
+                    "sysctl -w net.ipv4.tcp_congestion_control=bbr"
+                )
+
     def __format_output(self) -> None:
         """Format the output text files."""
         info("*** Formatting the output text files\n")
@@ -210,6 +220,7 @@ class Experiment:
                 if self.__has_capture
                 else []
             )
+
             if self.__group == GROUP_A:
                 cmds.append(
                     f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
@@ -525,6 +536,7 @@ class Experiment:
         info(f"*** Starting the experiment: {self.__group} - {self.__name}\n")
         self.__mn.start(has_clean_lab=has_clean_lab, n=n)
         self.__n_hosts = len(self.__mn.net.hosts)
+        self.__differentiate()
         self.__set_host_buffer()
         self.__apply_qdisc(
             alpha=alpha,
