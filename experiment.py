@@ -5,7 +5,7 @@ Version: 2.0.0.20211120
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-20 18:17:19
+LastEditTime: 2021-11-20 19:09:20
 '''
 """
 
@@ -213,6 +213,7 @@ class Experiment:
             )
 
             s_eth = f"s1-eth{i + 2}"
+            is_valid = False
             cmds = (
                 [
                     f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
@@ -234,9 +235,24 @@ class Experiment:
                     )
                 )
 
-            for cmd in cmds:
-                info(f'*** {s_eth} : ("{cmd}")\n')
-                check_call(cmd, shell=True)
+            while not is_valid:
+                for cmd in cmds:
+                    info(f'*** {s_eth} : ("{cmd}")\n')
+                    check_call(cmd, shell=True)
+
+                if self.__group == GROUP_A:
+                    with open(
+                        os.path.join(
+                            OUTPUT_BASE_DIR,
+                            self.__group,
+                            self.__name,
+                            s_eth,
+                            self.__OUTPUT_FILE_FORMATTED,
+                        )
+                    ) as f:
+                        is_valid = False if f.readline().strip() == "" else True
+                else:
+                    is_valid = True
 
     def __iperf_client(
         self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
