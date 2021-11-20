@@ -1,11 +1,11 @@
 """
 '''
-Description: the utilities of the experiment settings
-Version: 2.0.0.20211119
+Description: the utilities of the experiments
+Version: 2.0.0.20211120
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-19 19:36:53
+LastEditTime: 2021-11-20 16:51:42
 '''
 """
 
@@ -25,6 +25,8 @@ from net import check_bw_unit, Net
 
 ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
+GROUP_A = "same_amount"  # Group A: transfer the same amount of data.
+GROUP_B = "same_time"  # Group B: transfer data for the same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 SUMMARY_FILE = (
@@ -33,20 +35,10 @@ SUMMARY_FILE = (
 
 
 class Experiment:
-    """The class for defining the utilities of the experiment settings."""
+    """The class for defining the utilities of the experiments."""
 
-    def __init__(self, has_capture: bool = False) -> None:
-        """The constructor of the class for defining the utilities of the experiment settings.
-
-        Parameters
-        ----------
-        has_capture : bool, optional
-            A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`).
-        Raises
-        ------
-        ValueError
-            The value for RTT is invalid. Set a value larger than 0 but no larger than 4294967.
-        """
+    def __init__(self) -> None:
+        """The constructor of the class for defining the utilities of the experiment settings."""
         self.__CAPTURE_FILE = (
             "result.pcapng"  # The filename with the file extension of the capture file.
         )
@@ -68,11 +60,11 @@ class Experiment:
             "tbf",
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
-        self.__group = None  # The output folder name using the experiment group name.
-        self.__has_capture = has_capture
+        self.__group = None  # The experiment group.
+        self.__has_capture = None
         self.__mn = Net()
         self.__n_hosts = 0  # The number of hosts.
-        self.__name = None  # The output folder name using the experiment name.
+        self.__name = None  # The experiment name.
 
     def __apply_qdisc(
         self,
@@ -187,10 +179,29 @@ class Experiment:
                 os.makedirs(output_dir)
 
     def __format_output(self) -> None:
-        """Format the Wireshark (TShark) output files."""
-        info("*** Formatting the Wireshark (TShark) output files\n")
+        """Format the output text files."""
+        info("*** Formatting the output text files\n")
 
         for i in range(int(self.__n_hosts / 2)):
+            self.__mn.net.hosts[i].cmdPrint(
+                "cat "
+                + os.path.join(
+                    OUTPUT_BASE_DIR,
+                    self.__group,
+                    self.__name,
+                    f"hl{i + 1}",
+                    self.__OUTPUT_FILE,
+                )
+                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$14,$15}' > "
+                + os.path.join(
+                    OUTPUT_BASE_DIR,
+                    self.__group,
+                    self.__name,
+                    f"hl{i + 1}",
+                    self.__OUTPUT_FILE_FORMATTED,
+                )
+            )
+
             s_eth = f"s1-eth{i + 2}"
             cmds = (
                 [
@@ -199,23 +210,26 @@ class Experiment:
                 if self.__has_capture
                 else []
             )
-            cmds.append(
-                f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
-                + " | awk '{print $2}' > "
-                + os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__group,
-                    self.__name,
-                    s_eth,
-                    self.__OUTPUT_FILE_FORMATTED,
+            if self.__group == GROUP_A:
+                cmds.append(
+                    f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
+                    + " | awk '{print $2}' > "
+                    + os.path.join(
+                        OUTPUT_BASE_DIR,
+                        self.__group,
+                        self.__name,
+                        s_eth,
+                        self.__OUTPUT_FILE_FORMATTED,
+                    )
                 )
-            )  # TODO: sometimes read nothing when no capture files.
 
             for cmd in cmds:
                 info(f'*** {s_eth} : ("{cmd}")\n')
                 check_call(cmd, shell=True)
 
-    def __iperf_client(self, client_idx: int, n_b: int, n_b_unit_idx: int) -> None:
+    def __iperf_client(
+        self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
+    ) -> None:
         """A multiprocessing task to run an iPerf client.
 
         Parameters
@@ -226,15 +240,34 @@ class Experiment:
             The number of bytes transferred from an iPerf client.
         n_b_unit_idx : int
             The index of the unit of the number of bytes transferred from an iPerf client.
+        time : int
+            The time in seconds for running an iPerf client.
         """
-        cmd = f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)} > " + os.path.join(
-            OUTPUT_BASE_DIR,
-            self.__group,
-            self.__name,
-            f"hl{client_idx + 1}",
-            self.__OUTPUT_FILE,
+        cmd = (
+            f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -i 1 -e "
+            + (
+                f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
+                if self.__group == GROUP_A
+                else f"-t {time}"
+            )
+            + " > "
+            + os.path.join(
+                OUTPUT_BASE_DIR,
+                self.__group,
+                self.__name,
+                f"hl{client_idx + 1}",
+                self.__OUTPUT_FILE,
+            )
         )
-        info(f'*** hl{client_idx + 1} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
+        info(
+            f'*** hl{client_idx + 1} : ("{cmd}")\nIt starts at {datetime.now()}'
+            + (
+                ""
+                if self.__group == GROUP_A
+                else f" and should last for {time} second(s)"
+            )
+            + ".\n"
+        )
         self.__mn.net.hosts[client_idx].cmd(cmd)
 
     def __launch_servers(self) -> None:
@@ -243,7 +276,7 @@ class Experiment:
 
         for i in range(int(self.__n_hosts / 2), self.__n_hosts):
             self.__mn.net.hosts[i].cmdPrint(
-                "iperf -i 1 -s > "
+                "iperf -s > "
                 + os.path.join(
                     OUTPUT_BASE_DIR,
                     self.__group,
@@ -254,7 +287,7 @@ class Experiment:
                 + " &"
             )  # Add "&" in the end to run in the background.
 
-    def __run_clients(self, n_b: int, n_b_unit: str) -> None:
+    def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
         """Run iPerf clients almost simultaneously.
 
         Parameters
@@ -263,6 +296,8 @@ class Experiment:
             The number of bytes transferred from an iPerf client.
         n_b_unit : str
             The unit of the number of bytes transferred from an iPerf client.
+        time : int
+            The time in seconds for running an iPerf client.
         """
         info("*** Running iPerf clients almost simultaneously\n")
         processes = []
@@ -276,6 +311,7 @@ class Experiment:
                     list(self.__N_B_UNITS.keys())[
                         list(self.__N_B_UNITS.values()).index(n_b_unit)
                     ],
+                    time,
                 ),
             )
             processes.append(process)
@@ -329,8 +365,8 @@ class Experiment:
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
 
-    def __summarise(self, n_b: int, n_b_unit: str, name: str) -> None:
-        """Summarise the throughput and the flow completion time (FCT) for each relevant switch's interface in the summary file.
+    def __summarise(self, n_b: int, n_b_unit: str) -> None:
+        """Summarise the flow completion time (FCT) and throughput for each relevant switch's interface in the summary file.
 
         Parameters
         ----------
@@ -338,13 +374,11 @@ class Experiment:
             The number of bytes transferred from an iPerf client.
         n_b_unit : str
             The unit of the number of bytes transferred from an iPerf client.
-        name : str
-            The experiment name.
         """
         info(
-            "*** Summarising the throughput and the FCT for each relevant switch's interface in the summary file\n"
+            "*** Summarising the FCT and the throughput for each relevant switch's interface in the summary file\n"
         )
-        summary = name
+        summary = self.__name
 
         for i in range(int(self.__n_hosts / 2)):
             with open(
@@ -365,7 +399,7 @@ class Experiment:
             else:
                 volume = n_b * 8  # MB => Mbit
 
-            summary += f" {fct} {str(round(volume / float(fct)))}"  # TODO: throughput may be useless for fairness.
+            summary += f" {fct} {str(round(volume / float(fct)))}"
 
         with open(os.path.join(OUTPUT_BASE_DIR, self.__group, SUMMARY_FILE), "a") as f:
             f.write(summary + "\n")
@@ -400,22 +434,23 @@ class Experiment:
     def do(
         self,
         group: str,
-        name: str,
         alpha: int = ALPHA_DEFAULT,
         avpkt: int = 1000,
-        aqm: str = None,
+        aqm: str = "",
         beta: int = BETA_DEFAULT,
         bw: int = 1,
         bw_unit: str = "gbit",
         delay: int = 20,
+        has_capture: bool = False,
         has_clean_lab: bool = False,
         interval: int = 100,
-        limit: int = None,
+        limit: int = 0,
         n: int = 2,
         n_b: int = 512,
         n_b_unit: str = N_B_UNIT_DEFAULT,
         perturb: int = 60,
         target: int = 5,
+        time: int = 30,
         tupdate: int = 15,
     ) -> None:
         """Do an experiment.
@@ -423,13 +458,11 @@ class Experiment:
         Parameters
         ----------
         group : str
-            The experiment group.
-        name : str
-            The experiment name.
+            The experiment group (the value should be one of the values defined by the constants `GROUP_A` and `GROUP_B`).
         alpha : int, optional
             A smaller parameter for PIE to control the drop probability (the default is defined by a constant `ALPHA_DEFAULT`, and the value should be in the range between 0 and 32).
         aqm : str, optional
-            A classless queueing discipline representing an AQM algorithm (the default is `None`).
+            A classless queueing discipline representing an AQM algorithm (the default is an empty string).
         avpkt : int, optional
             A parameter for RED used with the burst to determine the time constant for average queue size calculations (the default is 1000).
         beta : int, optional
@@ -440,12 +473,14 @@ class Experiment:
             The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         delay : int, optional
             The latency in milliseconds (the default is 20).
+        has_capture : bool, optional
+            A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`)
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation network (the default is `False`).
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
-            The default is `None`.
+            The default is 0.
             For CoDel and PIE, the limit on the queue size in packets (the default is related to 10*BDP in the logic).
             For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
@@ -460,6 +495,8 @@ class Experiment:
         target : int, optional
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
+        time : int, optional
+            The time in seconds for running an iPerf client (the default is 30).
         tupdate : int, optional
             The frequency in milliseconds for PIE at which the system drop probability is calculated (the default is 15).
 
@@ -467,28 +504,25 @@ class Experiment:
         ------
         PoorPrepError
             BDP is not set. Check the call to the function `set_bdp()` before this function.
+        ValueError
+            The experiment group is invalid. Check if it is one of the specified values.
         """
-        bw_unit = check_bw_unit(bw_unit=bw_unit)
-        n_b_unit = n_b_unit.strip()
-
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
 
-        if alpha >= beta or alpha < 0 or alpha > 32 or beta < 0 or beta > 32:
-            alpha = ALPHA_DEFAULT
-            beta = BETA_DEFAULT
-            warning(
-                "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
-            )
+        group = group.strip()
 
-        if n_b_unit not in self.__N_B_UNITS.values():
-            n_b_unit = N_B_UNIT_DEFAULT
-            warning(
-                "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
-            )
+        if group not in [GROUP_A, GROUP_B]:
+            raise ValueError("invalid experiment group")
 
-        info(f"*** Starting the experiment: {group} - {name}\n")
+        bw_unit = check_bw_unit(bw_unit=bw_unit)
+        aqm = aqm.strip().lower()
+        n_b_unit = n_b_unit.strip()
         self.__group = group
+        self.__has_capture = has_capture
+        self.__name = "baseline" if aqm == "" or aqm == "tbf" else aqm
+
+        info(f"*** Starting the experiment: {self.__group} - {self.__name}\n")
         self.__mn.start(has_clean_lab=has_clean_lab, n=n)
         self.__n_hosts = len(self.__mn.net.hosts)
         self.__set_host_buffer()
@@ -499,45 +533,53 @@ class Experiment:
             bw=bw,
             bw_unit=bw_unit,
             interval=interval,
-            limit=10 * self.__bdp if limit is None else limit,
+            limit=10 * self.__bdp if limit == 0 else limit,
             perturb=perturb,
             target=target,
             tupdate=tupdate,
         )  # Apply TBF.
         self.__set_delay(delay=delay)
-        self.__name = name
 
-        if aqm is not None:
-            aqm = aqm.lower().strip()
-
-            if aqm != "tbf":
-                if limit is None:
-                    if aqm == "red":
-                        limit = 10 * self.__bdp
-                    else:
-                        limit = round(
-                            10 * self.__bdp / 1500
-                        )  # A TCP packet holds 1500 bytes of data at most.
-
-                self.__apply_qdisc(
-                    alpha=alpha,
-                    avpkt=avpkt,
-                    beta=beta,
-                    bw=bw,
-                    bw_unit=bw_unit,
-                    interval=interval,
-                    limit=limit,
-                    perturb=perturb,
-                    qdisc=aqm,
-                    target=target,
-                    tupdate=tupdate,
+        if aqm != "" and aqm != "tbf":
+            if alpha >= beta or alpha < 0 or alpha > 32 or beta < 0 or beta > 32:
+                alpha = ALPHA_DEFAULT
+                beta = BETA_DEFAULT
+                warning(
+                    "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
                 )
-                self.__name = aqm
+
+            if limit == 0:
+                if aqm == "red":
+                    limit = 10 * self.__bdp
+                else:
+                    limit = round(
+                        10 * self.__bdp / 1500
+                    )  # A TCP packet holds 1500 bytes of data at most.
+
+            if n_b_unit not in self.__N_B_UNITS.values():
+                n_b_unit = N_B_UNIT_DEFAULT
+                warning(
+                    "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
+                )
+
+            self.__apply_qdisc(
+                alpha=alpha,
+                avpkt=avpkt,
+                beta=beta,
+                bw=bw,
+                bw_unit=bw_unit,
+                interval=interval,
+                limit=limit,
+                perturb=perturb,
+                qdisc=aqm,
+                target=target,
+                tupdate=tupdate,
+            )
 
         self.__create_output_dir()
         self.__run_wireshark()
         self.__launch_servers()
-        self.__run_clients(n_b=n_b, n_b_unit=n_b_unit)
+        self.__run_clients(n_b=n_b, n_b_unit=n_b_unit, time=time)
         quietRun(
             "killall -15 tshark"
         )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
@@ -545,7 +587,10 @@ class Experiment:
             "killall -9 iperf"
         )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
-        self.__summarise(n_b=n_b, n_b_unit=n_b_unit, name=name)
+
+        if self.__group == GROUP_A:
+            self.__summarise(n_b=n_b, n_b_unit=n_b_unit)
+
         self.__mn.stop()
         info("\n")
 
