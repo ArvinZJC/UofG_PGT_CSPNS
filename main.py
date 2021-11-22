@@ -1,11 +1,11 @@
 """
 '''
 Description: the entry to the experiments and evaluation
-Version: 2.0.0.20211121
+Version: 2.0.0.20211122
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-21 21:26:53
+LastEditTime: 2021-11-22 22:40:10
 '''
 """
 
@@ -35,3 +35,4 @@ for group in [GROUP_A, GROUP_B]:
 # Only execute the evaluation module if the output results are expected no changes.
 eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
 eval.plot_throughput(group=GROUP_B)
+eval.plot_utilisation(group=GROUP_B)
