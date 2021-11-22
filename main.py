@@ -1,17 +1,24 @@
 """
 '''
-Description: the entry to the experiments
-Version: 2.0.0.20211120
+Description: the entry to the experiments and evaluation
+Version: 2.0.0.20211121
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-20 16:52:48
+LastEditTime: 2021-11-21 21:26:53
 '''
 """
 
 from mininet.log import setLogLevel
 
-from experiment import Experiment, GROUP_A, GROUP_B
+from experiment import (
+    Experiment,
+    GROUP_A,
+    GROUP_B,
+    OUTPUT_BASE_DIR,
+    OUTPUT_FILE_FORMATTED,
+)
+from eval import Eval
 
 setLogLevel("info")
 experiment = Experiment()
@@ -24,3 +31,7 @@ for group in [GROUP_A, GROUP_B]:
     experiment.do(aqm="PIE", group=group, target=15)
     experiment.do(aqm="RED", group=group)
     experiment.do(aqm="SFQ", group=group)
+
+# Only execute the evaluation module if the output results are expected no changes.
+eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
+eval.plot_throughput(group=GROUP_B)

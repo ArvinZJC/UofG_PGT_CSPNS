@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211120
+Version: 2.0.0.20211121
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-20 19:09:20
+LastEditTime: 2021-11-21 16:06:26
 '''
 """
 
@@ -29,6 +29,7 @@ GROUP_A = "same_amount"  # Group A: transfer the same amount of data.
 GROUP_B = "same_time"  # Group B: transfer data for the same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
+OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
 SUMMARY_FILE = (
     "summary.txt"  # The filename with the file extension of the summary file.
 )
@@ -51,7 +52,6 @@ class Experiment:
         self.__OUTPUT_FILE = (
             "result.txt"  # The filename with the file extension of the output file.
         )
-        self.__OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
         self.__QDISC = [
             "codel",
             "pie",
@@ -208,7 +208,7 @@ class Experiment:
                     self.__group,
                     self.__name,
                     f"hl{i + 1}",
-                    self.__OUTPUT_FILE_FORMATTED,
+                    OUTPUT_FILE_FORMATTED,
                 )
             )
 
@@ -231,7 +231,7 @@ class Experiment:
                         self.__group,
                         self.__name,
                         s_eth,
-                        self.__OUTPUT_FILE_FORMATTED,
+                        OUTPUT_FILE_FORMATTED,
                     )
                 )
 
@@ -247,7 +247,7 @@ class Experiment:
                             self.__group,
                             self.__name,
                             s_eth,
-                            self.__OUTPUT_FILE_FORMATTED,
+                            OUTPUT_FILE_FORMATTED,
                         )
                     ) as f:
                         is_valid = False if f.readline().strip() == "" else True
@@ -414,7 +414,7 @@ class Experiment:
                     self.__group,
                     self.__name,
                     f"s1-eth{i + 2}",
-                    self.__OUTPUT_FILE_FORMATTED,
+                    OUTPUT_FILE_FORMATTED,
                 )
             ) as f:
                 fct = f.readline().strip()

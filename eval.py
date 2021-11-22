@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211119
+Version: 2.0.0.20211121
 Author: Arvin Zhao
-Date: 2021-10-19 15:22:06
+Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-19 19:38:43
+LastEditTime: 2021-11-21 21:40:55
 '''
 """
 
@@ -16,117 +16,75 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from experiment import OUTPUT_BASE_DIR, SUMMARY_FILE
 
+class Eval:
+    """The class for defining the utilities of evaluation."""
 
-def import_summary(category: str, group: str) -> pd.DataFrame:
-    """Import the corresponding output in the summary file.
+    def __init__(self, base_dir: str, file_formatted: str) -> None:
+        """The constructor of the class for defining the utilities of evaluation.
 
-    Parameters
-    ----------
-    category : str
-        The category of the output (e.g., FCT).
-    group : str
-        The experiment group.
+        Parameters
+        ----------
+        base_dir : str
+            The name of the output base directory.
+        file_formatted : str
+            The filename with the file extension of the formatted output file.
+        """
+        self.__base_dir = base_dir
+        self.__file_formatted = file_formatted
 
-    Returns
-    -------
-    pandas.DataFrame
-        The corresponding output for the specified category.
+    def plot_throughput(self, group: str, n: int = 2) -> None:
+        """Plot each experiment's throughput over time for the specified experiment group.
 
-    Raises
-    ------
-    ValueError
-        The category does not exist. Check if the value is one of "FCT" and "throughput".
-    """
-    category = category.lower().strip()
+        Parameters
+        ----------
+        group : str
+            The experiment group.
+        n : int, optional
+            The number of the hosts on each side of the dumbbell topology (the default is 2).
+        """
+        info(
+            f"*** Plotting each experiment's throughput over time for the group: {group}\n"
+        )
+        plt.figure()
+        plt.title("Throughput over time")
+        experiments = [
+            entry.name
+            for entry in os.scandir(os.path.join(self.__base_dir, group))
+            if entry.is_dir()
+        ]
+        colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
 
-    if category not in ["fct", "throughput"]:
-        raise ValueError("invalid category")
-    else:
-        columns = (
-            [0, 1, 3] if category == "fct" else [0, 2, 4]
-        )  # TODO: n = 2 not always
+        for experiment, colour in zip(experiments, colours):
+            for i in range(n):
+                data = pd.read_csv(
+                    os.path.join(
+                        self.__base_dir,
+                        group,
+                        experiment,
+                        f"hl{i + 1}",
+                        self.__file_formatted,
+                    ),
+                    header=None,
+                    sep=" ",
+                )[:-1][[0, 1]]
+                plt.plot(
+                    data[0],
+                    data[1],
+                    color=colour,
+                    label=experiment if i == 0 else None,
+                )
 
-    data = pd.read_csv(
-        os.path.join(OUTPUT_BASE_DIR, group, SUMMARY_FILE),
-        header=None,
-        sep=" ",
-    )[columns]
-    data.columns = range(len(columns))
-    return data
-
-
-def make_plot(data: pd.DataFrame, path: str, title: str, y_label: str) -> None:
-    """Make a line chart.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        The data to make a line chart.
-    path : str
-        The path to save the chart.
-    title : str
-        The chart title.
-    y_label : str
-        The y-axis label of the chart.
-
-    Raises
-    ------
-    ValueError
-        The data to make a line chart is invalid. Check if the data is a list and each element is a pandas dataframe.
-    """
-    if not isinstance(data, pd.DataFrame) and data.shape[1] != 3:
-        raise ValueError("invalid data to make a line chart")
-
-    ind = np.arange(len(data[0]))
-    width = 0.35
-    plt.figure()
-    plt.bar(ind, data[1], width, label="Source host 1")
-    plt.bar(ind + width, data[2], width, label="Source host 2")
-    plt.title(label=title)
-    plt.legend()
-    plt.xlabel("experiment")
-    plt.xticks(ind + width / 2, data[0])
-    plt.ylabel(y_label)
-    plt.savefig(path)
-
-
-def plot_fct(group: str) -> None:
-    """Plot a line chart showing the flow completion time (FCT) over experiments.
-
-    Parameters
-    ----------
-    group : str
-        The experiment group.
-    """
-    info("*** Plotting FCT over experiments\n")
-    make_plot(
-        data=import_summary(category="FCT", group=group),
-        path=os.path.join(OUTPUT_BASE_DIR, group, "FCT.png"),
-        title="FCT over experiments",
-        y_label="FCT (sec)",
-    )
-
-
-def plot_throughput(group: str) -> None:
-    """Plot a line chart showing the throughput over experiments.
-
-    Parameters
-    ----------
-    group : str
-        The experiment group.
-    """
-    info("*** Plotting throughput over experiments\n")
-    make_plot(
-        data=import_summary(category="throughput", group=group),
-        path=os.path.join(OUTPUT_BASE_DIR, group, "throughput.png"),
-        title="Throughput over experiments",
-        y_label="throughput (Mbps)",
-    )
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.xlabel("time (sec)")
+        plt.ylabel("throughput (Mbps)")
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.__base_dir, group, "throughput.png"))
 
 
 # Simple test purposes only.
 if __name__ == "__main__":
-    plot_fct(group="fairness")
-    # TODO: plot_throughput(group="fairness")
+    from experiment import GROUP_B, OUTPUT_BASE_DIR, OUTPUT_FILE_FORMATTED
+
+    eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
+    eval.plot_throughput(group=GROUP_B)
