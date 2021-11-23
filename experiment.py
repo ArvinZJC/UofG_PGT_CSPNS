@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211121
+Version: 2.0.0.20211123
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-21 16:06:26
+LastEditTime: 2021-11-23 16:15:25
 '''
 """
 
@@ -271,7 +271,7 @@ class Experiment:
             The time in seconds for running an iPerf client.
         """
         cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -i 1 -e "
+            f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -e -i 1 "
             + (
                 f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
                 if self.__group == GROUP_A
