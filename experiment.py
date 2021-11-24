@@ -5,7 +5,7 @@ Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 16:42:30
+LastEditTime: 2021-11-24 23:12:41
 '''
 """
 
@@ -152,11 +152,9 @@ class Experiment:
             burst = int(
                 bw * (1000000000 if bw_unit == "gbit" else 1000000) / hz / 8
             )  # Reference: https://unix.stackexchange.com/a/100797
-            cmd += (
-                f"root handle 1: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
-            )
+            cmd += f"parent 1: handle 10: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
         else:
-            cmd += f"parent 1: handle 2: {qdisc} "
+            cmd += f"parent 10: handle 100: {qdisc} "
 
             if qdisc == "codel":
                 cmd += f"limit {limit} interval {interval}ms target {target}ms"
@@ -425,7 +423,7 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        cmd = f"tc qdisc add dev s2-eth1 root netem delay {delay}ms"
+        cmd = f"tc qdisc add dev s1-eth1 root handle 1: netem delay {delay}ms"
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 
@@ -625,6 +623,7 @@ class Experiment:
             self.__differentiate()
 
         self.__set_host_buffer()
+        self.__set_delay(delay=delay)
         self.__apply_qdisc(
             alpha=alpha,
             avpkt=avpkt,
@@ -637,7 +636,6 @@ class Experiment:
             target=target,
             tupdate=tupdate,
         )  # Apply TBF.
-        self.__set_delay(delay=delay)
 
         if aqm != "" and aqm != "tbf":
             if alpha >= beta or alpha < 0 or alpha > 32 or beta < 0 or beta > 32:
