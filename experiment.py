@@ -5,7 +5,7 @@ Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 23:12:41
+LastEditTime: 2021-11-24 23:49:29
 '''
 """
 
@@ -152,9 +152,9 @@ class Experiment:
             burst = int(
                 bw * (1000000000 if bw_unit == "gbit" else 1000000) / hz / 8
             )  # Reference: https://unix.stackexchange.com/a/100797
-            cmd += f"parent 1: handle 10: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
+            cmd += f"parent 1: handle 2: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
         else:
-            cmd += f"parent 10: handle 100: {qdisc} "
+            cmd += f"parent 2: handle 3: {qdisc} "
 
             if qdisc == "codel":
                 cmd += f"limit {limit} interval {interval}ms target {target}ms"
@@ -340,7 +340,7 @@ class Experiment:
             sleep(0.01)
 
     def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
-        """Run iperf3 clients almost simultaneously.
+        """Run the iperf3 client(s) almost simultaneously if applicable.
 
         Parameters
         ----------
@@ -351,7 +351,11 @@ class Experiment:
         time : int
             The time in seconds for running an iperf3 client.
         """
-        info("*** Running iperf3 clients almost simultaneously\n")
+        info(
+            "*** Running the iperf3 client"
+            + ("s almost simultaneously" if self.__n > 1 else "")
+            + "\n"
+        )
         processes = []
 
         for i in range(self.__n):
@@ -745,4 +749,4 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(group=GROUP_A)
+    experiment.do(aqm="CoDel", group=GROUP_B)
