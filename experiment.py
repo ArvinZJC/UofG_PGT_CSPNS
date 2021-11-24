@@ -5,7 +5,7 @@ Version: 2.0.0.20211123
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-23 16:15:25
+LastEditTime: 2021-11-23 23:38:31
 '''
 """
 
@@ -14,8 +14,9 @@ from math import ceil, floor
 from multiprocessing import Process
 from shutil import rmtree
 from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
-from time import sleep
+from time import sleep, time
 import os
+import re
 
 from mininet.log import error, info, warning
 from mininet.util import quietRun
@@ -25,11 +26,14 @@ from net import check_bw_unit, Net
 
 ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
-GROUP_A = "same_amount"  # Group A: transfer the same amount of data.
-GROUP_B = "same_time"  # Group B: transfer data for the same time length.
+GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
+GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
+QLEN_FILE = (
+    "qlen.txt"  # The filename with the file extension of the queue length output file.
+)
 SUMMARY_FILE = (
     "summary.txt"  # The filename with the file extension of the summary file.
 )
@@ -61,10 +65,14 @@ class Experiment:
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__group = None  # The experiment group.
-        self.__has_capture = None
+        self.__has_capture = None  # A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated.
+        self.__has_monitor = None  #
+        self.__has_wireshark = None  # A flag indicating if the experiment should use Wireshark (TShark) to capture traffic.
+        self.__monitor = None  # The queue length monitor process.
         self.__mn = Net()
-        self.__n_hosts = 0  # The number of hosts.
+        self.__n = 0  # The number of the hosts on each side of the dumbbell topology.
         self.__name = None  # The experiment name.
+        self.__output_base_dir = None  # The experiment-specific output base directory.
 
     def __apply_qdisc(
         self,
@@ -168,12 +176,15 @@ class Experiment:
         """Create the output directories."""
         info("*** Creating the output directories if they do not exist\n")
         sections = [host.name for host in self.__mn.net.hosts]
-        sections.extend([f"s1-eth{i + 2}" for i in range(int(self.__n_hosts / 2))])
+
+        if self.__has_monitor:
+            sections.append("s1-eth1")
+
+        if self.__has_wireshark:
+            sections.extend([f"s1-eth{i + 2}" for i in range(self.__n)])
 
         for section in sections:
-            output_dir = os.path.join(
-                OUTPUT_BASE_DIR, self.__group, self.__name, section
-            )
+            output_dir = os.path.join(self.__output_base_dir, self.__name, section)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -182,7 +193,7 @@ class Experiment:
         """Differentiate flows to simulate different dynamic sharing the same bottleneck link."""
         info("*** Differentiating flows\n")
 
-        for i in range(int(self.__n_hosts / 2)):
+        for i in range(self.__n):
             if (i + 1) % 2 == 0:
                 self.__mn.net.hosts[i].cmdPrint(
                     "sysctl -w net.ipv4.tcp_congestion_control=bbr"
@@ -192,67 +203,64 @@ class Experiment:
         """Format the output text files."""
         info("*** Formatting the output text files\n")
 
-        for i in range(int(self.__n_hosts / 2)):
+        for i in range(self.__n):
             self.__mn.net.hosts[i].cmdPrint(
                 "cat "
                 + os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__group,
+                    self.__output_base_dir,
                     self.__name,
                     f"hl{i + 1}",
                     self.__OUTPUT_FILE,
                 )
                 + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$14}' > "
                 + os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__group,
+                    self.__output_base_dir,
                     self.__name,
                     f"hl{i + 1}",
                     OUTPUT_FILE_FORMATTED,
                 )
             )
 
-            s_eth = f"s1-eth{i + 2}"
-            is_valid = False
-            cmds = (
-                [
-                    f"tshark -r {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__CAPTURE_FILE)} > {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
-                ]
-                if self.__has_capture
-                else []
-            )
-
-            if self.__group == GROUP_A:
-                cmds.append(
-                    f"tail -1 {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)}"
-                    + " | awk '{print $2}' > "
-                    + os.path.join(
-                        OUTPUT_BASE_DIR,
-                        self.__group,
-                        self.__name,
-                        s_eth,
-                        OUTPUT_FILE_FORMATTED,
-                    )
+            if self.__has_wireshark:
+                s_eth = f"s1-eth{i + 2}"
+                is_valid = False
+                cmds = (
+                    [
+                        f"tshark -r {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__CAPTURE_FILE)} > {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)}"
+                    ]
+                    if self.__has_capture
+                    else []
                 )
 
-            while not is_valid:
-                for cmd in cmds:
-                    info(f'*** {s_eth} : ("{cmd}")\n')
-                    check_call(cmd, shell=True)
-
                 if self.__group == GROUP_A:
-                    with open(
-                        os.path.join(
-                            OUTPUT_BASE_DIR,
-                            self.__group,
+                    cmds.append(
+                        f"tail -1 {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)}"
+                        + " | awk '{print $2}' > "
+                        + os.path.join(
+                            self.__output_base_dir,
                             self.__name,
                             s_eth,
                             OUTPUT_FILE_FORMATTED,
                         )
-                    ) as f:
-                        is_valid = False if f.readline().strip() == "" else True
-                else:
-                    is_valid = True
+                    )
+
+                while not is_valid:
+                    for cmd in cmds:
+                        info(f'*** {s_eth} : ("{cmd}")\n')
+                        check_call(cmd, shell=True)
+
+                    if self.__group == GROUP_A:
+                        with open(
+                            os.path.join(
+                                self.__output_base_dir,
+                                self.__name,
+                                s_eth,
+                                OUTPUT_FILE_FORMATTED,
+                            )
+                        ) as f:
+                            is_valid = False if f.readline().strip() == "" else True
+                    else:
+                        is_valid = True
 
     def __iperf_client(
         self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
@@ -271,7 +279,7 @@ class Experiment:
             The time in seconds for running an iPerf client.
         """
         cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + int(self.__n_hosts / 2)].IP()} -e -i 1 "
+            f"iperf -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -e -i 1 "
             + (
                 f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
                 if self.__group == GROUP_A
@@ -279,8 +287,7 @@ class Experiment:
             )
             + " > "
             + os.path.join(
-                OUTPUT_BASE_DIR,
-                self.__group,
+                self.__output_base_dir,
                 self.__name,
                 f"hl{client_idx + 1}",
                 self.__OUTPUT_FILE,
@@ -297,22 +304,28 @@ class Experiment:
         )
         self.__mn.net.hosts[client_idx].cmd(cmd)
 
-    def __launch_servers(self) -> None:
-        """Launch iPerf in the server mode in the background."""
-        info("*** Launching iPerf in the server mode in the background\n")
+    def __qlen_monitor(self) -> None:
+        """A multiprocessing task to run a queue length monitor."""
+        pattern = re.compile(r"backlog\s[^\s]+\s([\d]+)p")
+        s_eth = "s1-eth1"
+        cmd = f"tc -s qdisc show dev {s_eth}"
+        info(f'*** {s_eth} : ("{cmd}")\n')
+        pattern = re.compile(r"backlog\s[^\s]+\s([\d]+)p")
+        output_file = os.path.join(
+            self.__output_base_dir, self.__name, s_eth, QLEN_FILE
+        )
+        open(output_file, "w").write("")
+        init_time = time()
 
-        for i in range(int(self.__n_hosts / 2), self.__n_hosts):
-            self.__mn.net.hosts[i].cmdPrint(
-                "iperf -s > "
-                + os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__group,
-                    self.__name,
-                    f"hr{i - int(self.__n_hosts / 2) + 1}",
-                    self.__OUTPUT_FILE,
-                )
-                + " &"
-            )  # Add "&" in the end to run in the background.
+        while True:
+            matches = re.findall(
+                pattern, Popen(cmd, shell=True, stdout=PIPE).stdout.read().decode()
+            )
+
+            if matches and len(matches) > 0:
+                open(output_file, "a").write(f"{time() - init_time} {matches[0]}\n")
+
+            sleep(0.01)
 
     def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
         """Run iPerf clients almost simultaneously.
@@ -329,7 +342,7 @@ class Experiment:
         info("*** Running iPerf clients almost simultaneously\n")
         processes = []
 
-        for i in range(int(self.__n_hosts / 2)):
+        for i in range(self.__n):
             process = Process(
                 target=self.__iperf_client,
                 args=(
@@ -347,12 +360,34 @@ class Experiment:
         for process in processes:
             process.join()
 
+    def __run_monitor(self) -> None:
+        """Run a queue length monitor."""
+        info("*** Running a queue length monitor\n")
+        self.__monitor = Process(target=self.__qlen_monitor)
+        self.__monitor.start()
+
+    def __run_servers(self) -> None:
+        """Run iPerf in the server mode in the background."""
+        info("*** Running iPerf in the server mode in the background\n")
+
+        for i in range(self.__n, self.__n * 2):
+            self.__mn.net.hosts[i].cmdPrint(
+                "iperf -s > "
+                + os.path.join(
+                    self.__output_base_dir,
+                    self.__name,
+                    f"hr{i - self.__n + 1}",
+                    self.__OUTPUT_FILE,
+                )
+                + " &"
+            )  # Add "&" in the end to run in the background.
+
     def __run_wireshark(self) -> None:
         """Run Wireshark (TShark) in the background."""
         info("*** Running Wireshark (TShark) in the background\n")
         processes = []
 
-        for i in range(int(self.__n_hosts / 2)):
+        for i in range(self.__n):
             process = Process(target=self.__wireshark, args=(i + 2,))
             processes.append(process)
             process.start()
@@ -407,11 +442,10 @@ class Experiment:
         )
         summary = self.__name
 
-        for i in range(int(self.__n_hosts / 2)):
+        for i in range(self.__n):
             with open(
                 os.path.join(
-                    OUTPUT_BASE_DIR,
-                    self.__group,
+                    self.__output_base_dir,
                     self.__name,
                     f"s1-eth{i + 2}",
                     OUTPUT_FILE_FORMATTED,
@@ -428,7 +462,10 @@ class Experiment:
 
             summary += f" {fct} {str(round(volume / float(fct)))}"
 
-        with open(os.path.join(OUTPUT_BASE_DIR, self.__group, SUMMARY_FILE), "a") as f:
+        with open(
+            os.path.join(self.__output_base_dir, SUMMARY_FILE),
+            "a",
+        ) as f:
             f.write(summary + "\n")
 
     def __wireshark(self, s_eth_idx: int) -> None:
@@ -441,9 +478,9 @@ class Experiment:
         """
         s_eth = f"s1-eth{s_eth_idx}"
         cmd = f"tshark -f 'tcp' -i {s_eth} " + (
-            f"-w {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__CAPTURE_FILE)} &"
+            f"-w {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__CAPTURE_FILE)} &"
             if self.__has_capture
-            else f"> {os.path.join(OUTPUT_BASE_DIR, self.__group, self.__name, s_eth, self.__OUTPUT_FILE)} &"
+            else f"> {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)} &"
         )
         info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
@@ -470,6 +507,8 @@ class Experiment:
         delay: int = 20,
         has_capture: bool = False,
         has_clean_lab: bool = False,
+        has_monitor: bool = False,
+        has_wireshark: bool = False,
         interval: int = 100,
         limit: int = 0,
         n: int = 2,
@@ -504,6 +543,10 @@ class Experiment:
             A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`)
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation network (the default is `False`).
+        has_monitor : bool, optional
+            A flag indicating if a queue length monitor should be established (the default is `False`).
+        has_wireshark : bool, optional
+            A flag indicating if the experiment should use Wireshark (TShark) to capture traffic (the default is `False`).
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
@@ -512,7 +555,7 @@ class Experiment:
             For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
         n : int, optional
-            The number of the hosts on each side of the dumbbell topology (the default is 2).
+            The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional
             The number of bytes transferred from an iPerf client (the default is 1).
         n_b_unit : str, optional
@@ -533,6 +576,7 @@ class Experiment:
             BDP is not set. Check the call to the function `set_bdp()` before this function.
         ValueError
             The experiment group is invalid. Check if it is one of the specified values.
+            The number of the hosts on each side of the dumbbell topology is invalid. Check if it is in the range between 1 and 5.
         """
         if self.__bdp is None:
             raise PoorPrepError(message="BDP not set")
@@ -542,17 +586,30 @@ class Experiment:
         if group not in [GROUP_A, GROUP_B]:
             raise ValueError("invalid experiment group")
 
+        if n < 1 or n > 5:
+            raise ValueError(
+                "invalid number of the hosts on each side of the dumbbell topology"
+            )
+
         bw_unit = check_bw_unit(bw_unit=bw_unit)
         aqm = aqm.strip().lower()
         n_b_unit = n_b_unit.strip()
         self.__group = group
         self.__has_capture = has_capture
+        self.__has_monitor = has_monitor
+        self.__has_wireshark = has_wireshark
+        self.__n = n
         self.__name = "baseline" if aqm == "" or aqm == "tbf" else aqm
+        self.__output_base_dir = os.path.join(
+            OUTPUT_BASE_DIR, f"{self.__n}f", self.__group, f"{bw}{bw_unit}"
+        )
 
-        info(f"*** Starting the experiment: {self.__group} - {self.__name}\n")
-        self.__mn.start(has_clean_lab=has_clean_lab, n=n)
-        self.__n_hosts = len(self.__mn.net.hosts)
-        self.__differentiate()
+        info(f"*** Starting the experiment: {bw}{bw_unit} - {self.__name}\n")
+        self.__mn.start(has_clean_lab=has_clean_lab, n=self.__n)
+
+        if self.__n > 1:
+            self.__differentiate()
+
         self.__set_host_buffer()
         self.__apply_qdisc(
             alpha=alpha,
@@ -605,18 +662,31 @@ class Experiment:
             )
 
         self.__create_output_dir()
-        self.__run_wireshark()
-        self.__launch_servers()
+
+        if self.__has_wireshark:
+            self.__run_wireshark()
+
+        self.__run_servers()
+
+        if self.__has_monitor:
+            self.__run_monitor()
+
         self.__run_clients(n_b=n_b, n_b_unit=n_b_unit, time=time)
-        quietRun(
-            "killall -15 tshark"
-        )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
+
+        if self.__has_monitor:
+            self.__monitor.terminate()
+
+        if self.__has_wireshark:
+            quietRun(
+                "killall -15 tshark"
+            )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
+
         quietRun(
             "killall -9 iperf"
         )  # Immediately terminate any iPerf that might still be running.
         self.__format_output()
 
-        if self.__group == GROUP_A:
+        if self.__has_wireshark and self.__group == GROUP_A:
             self.__summarise(n_b=n_b, n_b_unit=n_b_unit)
 
         self.__mn.stop()

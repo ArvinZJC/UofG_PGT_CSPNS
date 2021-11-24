@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211122
+Version: 2.0.0.20211123
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-22 22:38:43
+LastEditTime: 2021-11-23 23:29:54
 '''
 """
 
@@ -35,13 +35,19 @@ class Eval:
         self.__base_dir = base_dir
         self.__file_formatted = file_formatted
 
-    def plot_throughput(self, group: str, n: int = 2) -> None:
+    def plot_throughput(
+        self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 2
+    ) -> None:
         """Plot each experiment's flow throughput over time for the specified experiment group.
 
         Parameters
         ----------
         group : str
             The experiment group.
+        bw : int, optional
+            The bandwidth (the default is 1).
+        bw_unit : str, optional
+            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2).
         """
@@ -51,12 +57,9 @@ class Eval:
         )
         plt.figure()
         plt.title("Throughput over time")
+        base_dir = os.path.join(self.__base_dir, f"{n}f", group, f"{bw}{bw_unit}")
         experiments = sorted(
-            [
-                entry.name
-                for entry in os.scandir(os.path.join(self.__base_dir, group))
-                if entry.is_dir()
-            ]
+            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
         )
         colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
 
@@ -64,11 +67,7 @@ class Eval:
             for i in range(n):
                 data = pd.read_csv(
                     os.path.join(
-                        self.__base_dir,
-                        group,
-                        experiment,
-                        f"hl{i + 1}",
-                        self.__file_formatted,
+                        base_dir, experiment, f"hl{i + 1}", self.__file_formatted
                     ),
                     header=None,
                     sep=" ",
@@ -84,7 +83,7 @@ class Eval:
         plt.xlabel("time (sec)")
         plt.ylabel("throughput (Mbps)")
         plt.tight_layout()
-        plt.savefig(os.path.join(self.__base_dir, group, "throughput.png"))
+        plt.savefig(os.path.join(base_dir, "throughput.png"))
 
     def plot_utilisation(
         self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 2
@@ -109,12 +108,9 @@ class Eval:
         )
         plt.figure()
         plt.title("Link utilisation")
+        base_dir = os.path.join(self.__base_dir, f"{n}f", group, f"{bw}{bw_unit}")
         experiments = sorted(
-            [
-                entry.name
-                for entry in os.scandir(os.path.join(self.__base_dir, group))
-                if entry.is_dir()
-            ]
+            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
         )
         results = []
 
@@ -124,11 +120,7 @@ class Eval:
             for i in range(n):
                 throughput += pd.read_csv(
                     os.path.join(
-                        self.__base_dir,
-                        group,
-                        experiment,
-                        f"hl{i + 1}",
-                        self.__file_formatted,
+                        base_dir, experiment, f"hl{i + 1}", self.__file_formatted
                     ),
                     header=None,
                     sep=" ",
@@ -142,7 +134,7 @@ class Eval:
         plt.xlabel("experiment")
         plt.ylabel("link utilisation (%)")
         plt.ylim(np.min(results) - 5, 100)
-        plt.savefig(os.path.join(self.__base_dir, group, "utilisation.png"))
+        plt.savefig(os.path.join(base_dir, "utilisation.png"))
 
 
 # Simple test purposes only.
