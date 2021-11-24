@@ -5,7 +5,7 @@ Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 14:39:27
+LastEditTime: 2021-11-24 16:33:33
 '''
 """
 
@@ -62,9 +62,8 @@ class Eval:
             The number of the hosts on each side of the dumbbell topology.
         """
         info(
-            "*** Plotting " + "the baseline and SFQ's"
-            if has_sfq_only
-            else "each AQM algorithm's"
+            "*** Plotting "
+            + ("the baseline and SFQ's" if has_sfq_only else "each AQM algorithm's")
             + f" flow throughput over time for the group: {group}\n"
         )
         plt.figure()
@@ -190,8 +189,10 @@ class Eval:
 
 # Simple test purposes only.
 if __name__ == "__main__":
+    from mininet.log import setLogLevel
     from experiment import GROUP_B, OUTPUT_BASE_DIR, OUTPUT_FILE_FORMATTED
 
+    setLogLevel("info")
     eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
     eval.plot_throughput(group=GROUP_B)
     eval.plot_utilisation(group=GROUP_B)
