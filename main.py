@@ -1,11 +1,11 @@
 """
 '''
 Description: the entry to the experiments and evaluation
-Version: 2.0.0.20211123
+Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-23 23:37:22
+LastEditTime: 2021-11-24 13:31:07
 '''
 """
 
@@ -39,8 +39,9 @@ experiment.do(aqm="SFQ", group=GROUP_A, has_wireshark=True, n=1)
 info("\n*** 1 flow, specified time, 1Gbps/100Mbps/10Mbps, all\n\n")
 for bw in [1000, 100, 10]:
     bw = 1 if bw == 1000 else bw
-    bw_unit = "gbit" if bw == 1000 else "mbit"
-    experiment.do(bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
+    bw_unit = "gbit" if bw == 1 else "mbit"
+    has_monitor = True if bw == 1 else False
+    experiment.do(bw=bw, bw_unit=bw_unit, group=GROUP_B, has_monitor=has_monitor, n=1)
     experiment.do(aqm="CoDel", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
     experiment.do(
         aqm="PIE",
@@ -48,11 +49,11 @@ for bw in [1000, 100, 10]:
         bw_unit=bw_unit,
         group=GROUP_B,
         n=1,
-        has_monitor=True,
+        has_monitor=has_monitor,
         target=15,
     )
     experiment.do(
-        aqm="RED", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1, has_monitor=True
+        aqm="RED", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1, has_monitor=has_monitor
     )
     experiment.do(aqm="SFQ", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
 
