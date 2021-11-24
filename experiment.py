@@ -5,7 +5,7 @@ Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 16:19:58
+LastEditTime: 2021-11-24 16:42:30
 '''
 """
 
@@ -210,7 +210,7 @@ class Experiment:
                 self.__output_base_dir, self.__name, f"hl{i + 1}", OUTPUT_FILE_FORMATTED
             )
             open(output_formatted, "w").write("")
-            intervals = json.loads(
+            data = json.loads(
                 open(
                     os.path.join(
                         self.__output_base_dir,
@@ -220,13 +220,20 @@ class Experiment:
                     ),
                     "r",
                 ).read()
-            ).get("intervals")
-            intervals = [interval.get("streams")[0] for interval in intervals]
+            )
+            summary = (data.get("end").get("streams")[0]).get("sender")
+            intervals = [
+                interval.get("streams")[0] for interval in data.get("intervals")
+            ]
 
             for interval in intervals:
                 open(output_formatted, "a").write(
                     f"{interval.get('end')} {interval.get('bits_per_second') / 1000000} {interval.get('snd_cwnd') / 1000000} {interval.get('rtt') / 1000}\n"
                 )  # end time (sec), throughput (Mbps), CWND (Mbytes), RTT (ms)
+
+            open(output_formatted, "a").write(
+                f"{summary.get('end')} {summary.get('bits_per_second') / 1000000}\n"
+            )
 
             if self.__has_wireshark:
                 s_eth = f"s1-eth{i + 2}"
