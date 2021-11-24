@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211123
+Version: 2.0.0.20211124
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-23 23:38:31
+LastEditTime: 2021-11-24 16:19:58
 '''
 """
 
@@ -15,6 +15,7 @@ from multiprocessing import Process
 from shutil import rmtree
 from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
 from time import sleep, time
+import json
 import os
 import re
 
@@ -56,6 +57,7 @@ class Experiment:
         self.__OUTPUT_FILE = (
             "result.txt"  # The filename with the file extension of the output file.
         )
+        self.__OUTPUT_JFILE = "result.json"  # The filename with the file extension of the output json file.
         self.__QDISC = [
             "codel",
             "pie",
@@ -200,26 +202,31 @@ class Experiment:
                 )
 
     def __format_output(self) -> None:
-        """Format the output text files."""
-        info("*** Formatting the output text files\n")
+        """Format the output files."""
+        info("*** Formatting the output files\n")
 
         for i in range(self.__n):
-            self.__mn.net.hosts[i].cmdPrint(
-                "cat "
-                + os.path.join(
-                    self.__output_base_dir,
-                    self.__name,
-                    f"hl{i + 1}",
-                    self.__OUTPUT_FILE,
-                )
-                + "| grep sec | tr - ' ' | tr / ' ' | awk '{print $4,$8,$14}' > "
-                + os.path.join(
-                    self.__output_base_dir,
-                    self.__name,
-                    f"hl{i + 1}",
-                    OUTPUT_FILE_FORMATTED,
-                )
+            output_formatted = os.path.join(
+                self.__output_base_dir, self.__name, f"hl{i + 1}", OUTPUT_FILE_FORMATTED
             )
+            open(output_formatted, "w").write("")
+            intervals = json.loads(
+                open(
+                    os.path.join(
+                        self.__output_base_dir,
+                        self.__name,
+                        f"hl{i + 1}",
+                        self.__OUTPUT_JFILE,
+                    ),
+                    "r",
+                ).read()
+            ).get("intervals")
+            intervals = [interval.get("streams")[0] for interval in intervals]
+
+            for interval in intervals:
+                open(output_formatted, "a").write(
+                    f"{interval.get('end')} {interval.get('bits_per_second') / 1000000} {interval.get('snd_cwnd') / 1000000} {interval.get('rtt') / 1000}\n"
+                )  # end time (sec), throughput (Mbps), CWND (Mbytes), RTT (ms)
 
             if self.__has_wireshark:
                 s_eth = f"s1-eth{i + 2}"
@@ -262,24 +269,24 @@ class Experiment:
                     else:
                         is_valid = True
 
-    def __iperf_client(
+    def __iperf3_client(
         self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
     ) -> None:
-        """A multiprocessing task to run an iPerf client.
+        """A multiprocessing task to run an iperf3 client.
 
         Parameters
         ----------
         client_idx : int
             The index of the client host.
         n_b : int
-            The number of bytes transferred from an iPerf client.
+            The number of bytes transferred from an iperf3 client.
         n_b_unit_idx : int
-            The index of the unit of the number of bytes transferred from an iPerf client.
+            The index of the unit of the number of bytes transferred from an iperf3 client.
         time : int
-            The time in seconds for running an iPerf client.
+            The time in seconds for running an iperf3 client.
         """
         cmd = (
-            f"iperf -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -e -i 1 "
+            f"iperf3 -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -J "
             + (
                 f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
                 if self.__group == GROUP_A
@@ -290,7 +297,7 @@ class Experiment:
                 self.__output_base_dir,
                 self.__name,
                 f"hl{client_idx + 1}",
-                self.__OUTPUT_FILE,
+                self.__OUTPUT_JFILE,
             )
         )
         info(
@@ -328,23 +335,23 @@ class Experiment:
             sleep(0.01)
 
     def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
-        """Run iPerf clients almost simultaneously.
+        """Run iperf3 clients almost simultaneously.
 
         Parameters
         ----------
         n_b : int
-            The number of bytes transferred from an iPerf client.
+            The number of bytes transferred from an iperf3 client.
         n_b_unit : str
-            The unit of the number of bytes transferred from an iPerf client.
+            The unit of the number of bytes transferred from an iperf3 client.
         time : int
-            The time in seconds for running an iPerf client.
+            The time in seconds for running an iperf3 client.
         """
-        info("*** Running iPerf clients almost simultaneously\n")
+        info("*** Running iperf3 clients almost simultaneously\n")
         processes = []
 
         for i in range(self.__n):
             process = Process(
-                target=self.__iperf_client,
+                target=self.__iperf3_client,
                 args=(
                     i,
                     n_b,
@@ -367,12 +374,12 @@ class Experiment:
         self.__monitor.start()
 
     def __run_servers(self) -> None:
-        """Run iPerf in the server mode in the background."""
-        info("*** Running iPerf in the server mode in the background\n")
+        """Run iperf3 in the server mode in the background."""
+        info("*** Running iperf3 in the server mode in the background\n")
 
         for i in range(self.__n, self.__n * 2):
             self.__mn.net.hosts[i].cmdPrint(
-                "iperf -s > "
+                "iperf3 -i 0 -s > "
                 + os.path.join(
                     self.__output_base_dir,
                     self.__name,
@@ -682,8 +689,8 @@ class Experiment:
             )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
 
         quietRun(
-            "killall -9 iperf"
-        )  # Immediately terminate any iPerf that might still be running.
+            "killall -9 iperf3"
+        )  # Immediately terminate any iperf3 that might still be running.
         self.__format_output()
 
         if self.__has_wireshark and self.__group == GROUP_A:
@@ -721,3 +728,16 @@ class Experiment:
         # BDP would not be smaller than the default buffer allocated when applications create a TCP socket.
         if self.__bdp < 87380:
             self.__bdp = 87380
+
+
+# Simple test purposes only.
+if __name__ == "__main__":
+    from mininet.clean import cleanup
+    from mininet.log import setLogLevel
+
+    setLogLevel("info")
+    cleanup()
+    experiment = Experiment()
+    experiment.clear_output()
+    experiment.set_bdp()
+    experiment.do(group=GROUP_A)
