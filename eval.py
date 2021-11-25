@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 18:32:41
+LastEditTime: 2021-11-25 23:33:07
 '''
 """
 
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from experiment import GROUP_B
+from experiment import GROUP_A, GROUP_B
 
 
 class Eval:
@@ -37,6 +37,7 @@ class Eval:
         )
         self.__FLOW_1 = "1f"  # The name of the experiment using 1 flow.
         self.__FLOW_2 = "2f"  # The name of the experiment using 2 flows.
+        self.__CODEL = "codel"  # The name of the experiment for CoDel.
         self.__PIE = "pie"  # The name of the experiment for PIE.
         self.__RED = "red"  # The name of the experiment for RED.
         self.__SFQ = "sfq"  # The name of the experiment for SFQ.
@@ -193,7 +194,7 @@ class Eval:
         )
 
     def plot_cwnd(self) -> None:
-        """Plot the flow CWND over time for the group transferring data for the specified/same time length with 1 flow and the default bandwidth."""
+        """Plot the flow CWND over time for the group transferring data for the specified time length with 1 flow and the default bandwidth."""
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
@@ -202,13 +203,43 @@ class Eval:
         )
         colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
 
-        for name in [self.__PIE, self.__RED]:
+        for name in [self.__CODEL, self.__PIE, self.__RED]:
             self.__make_cwnd_plot(
                 base_dir=base_dir, colours=colours, experiments=experiments, name=name
             )
 
+    def plot_fct(self) -> None:
+        """Plot all FCT for the group transferring the specified amount of data with 1 flow and the default bandwidth."""
+        base_dir = os.path.join(
+            self.__base_dir, self.__FLOW_1, GROUP_A, self.__BW_NAME_DEFAULT
+        )
+        experiments = sorted(
+            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
+        )
+        results = [
+            pd.read_csv(
+                os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
+                header=None,
+                sep=" ",
+            )[-1:][[0]][0]
+            for experiment in experiments
+        ]
+        info(
+            f"*** Plotting all FCT: {self.__FLOW_1} - {GROUP_A} - {self.__BW_NAME_DEFAULT}\n"
+        )
+        plt.figure()
+        plt.title("FCT achieved in each experiment")
+
+        for experiment, result in zip(experiments, results):
+            plt.bar(experiment, result)
+
+        plt.xlabel("experiment")
+        plt.ylabel("FCT (sec)")
+        plt.ylim(np.min(results) - 1, np.max(results) + 0.2)
+        plt.savefig(os.path.join(base_dir, "fct.png"))
+
     def plot_rtt(self) -> None:
-        """Plot the flow RTT over time for the group transferring data for the specified/same time length with 1 flow and different bandwidth settings."""
+        """Plot the flow RTT over time for the group transferring data for the specified time length with 1 flow and different bandwidth settings."""
         group_base_dir = os.path.join(self.__base_dir, self.__FLOW_1, GROUP_B)
         bw_names = [
             entry.name for entry in os.scandir(group_base_dir) if entry.is_dir()
@@ -228,7 +259,7 @@ class Eval:
             )
 
     def plot_throughput(self) -> None:
-        """Plot the flow throughput over time for the group transferring data for the specified/same time length with 2 flows and different bandwidth settings."""
+        """Plot the flow throughput over time for the group transferring data for the same time length with 2 flows and different bandwidth settings."""
         group_base_dir = os.path.join(self.__base_dir, self.__FLOW_2, GROUP_B)
         bw_names = [
             entry.name for entry in os.scandir(group_base_dir) if entry.is_dir()
@@ -254,7 +285,7 @@ class Eval:
                 )
 
     def plot_utilisation(self) -> None:
-        """Plot each AQM algorithm's link utilisation for the group transferring data for the specified/same time length with 1 flow and the default bandwidth."""
+        """Plot each AQM algorithm's link utilisation for the group transferring data for the specified time length with 1 flow and the default bandwidth."""
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
@@ -298,6 +329,7 @@ if __name__ == "__main__":
     setLogLevel("info")
     eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
     eval.plot_cwnd()
+    eval.plot_fct()
     eval.plot_rtt()
     eval.plot_throughput()
     eval.plot_utilisation()

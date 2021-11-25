@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 19:49:58
+LastEditTime: 2021-11-25 23:10:59
 '''
 """
 
@@ -28,6 +28,8 @@ ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
+GROUP_C = "s_packets"  # Group C: transfer the specified/same number of packets.
+LOSS_DEFAULT = 0
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
@@ -46,7 +48,7 @@ class Experiment:
             0: "G",
             1: "K",
             2: "M",
-        }  # The dictionary of the units of the number of bytes transferred from an iPerf client.
+        }  # The dictionary of the units of the number of bytes transferred from an iperf client.
         self.__OUTPUT_FILE = (
             "result.txt"  # The filename with the file extension of the output file.
         )
@@ -64,7 +66,6 @@ class Experiment:
         self.__has_wireshark = None  # A flag indicating if the experiment should use Wireshark (TShark) to capture traffic.
         self.__mn = Net()
         self.__n = 0  # The number of the hosts on each side of the dumbbell topology.
-        self.__name = None  # The experiment name.
         self.__output_base_dir = None  # The experiment-specific output base directory.
 
     def __apply_qdisc(
@@ -174,7 +175,7 @@ class Experiment:
             sections.extend([f"s1-eth{i + 2}" for i in range(self.__n)])
 
         for section in sections:
-            output_dir = os.path.join(self.__output_base_dir, self.__name, section)
+            output_dir = os.path.join(self.__output_base_dir, section)
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
@@ -195,16 +196,13 @@ class Experiment:
 
         for i in range(self.__n):
             output_formatted = os.path.join(
-                self.__output_base_dir, self.__name, f"hl{i + 1}", OUTPUT_FILE_FORMATTED
+                self.__output_base_dir, f"hl{i + 1}", OUTPUT_FILE_FORMATTED
             )
             open(output_formatted, "w").write("")
             data = json.loads(
                 open(
                     os.path.join(
-                        self.__output_base_dir,
-                        self.__name,
-                        f"hl{i + 1}",
-                        self.__OUTPUT_JFILE,
+                        self.__output_base_dir, f"hl{i + 1}", self.__OUTPUT_JFILE
                     ),
                     "r",
                 ).read()
@@ -248,10 +246,7 @@ class Experiment:
             )
             + " > "
             + os.path.join(
-                self.__output_base_dir,
-                self.__name,
-                f"hl{client_idx + 1}",
-                self.__OUTPUT_JFILE,
+                self.__output_base_dir, f"hl{client_idx + 1}", self.__OUTPUT_JFILE
             )
         )
         info(
@@ -310,10 +305,7 @@ class Experiment:
             self.__mn.net.hosts[i].cmdPrint(
                 "iperf3 -i 0 -s > "
                 + os.path.join(
-                    self.__output_base_dir,
-                    self.__name,
-                    f"hr{i - self.__n + 1}",
-                    self.__OUTPUT_FILE,
+                    self.__output_base_dir, f"hr{i - self.__n + 1}", self.__OUTPUT_FILE
                 )
                 + " &"
             )  # Add "&" in the end to run in the background.
@@ -333,13 +325,15 @@ class Experiment:
 
         sleep(1)  # Wait for 1 second to ensure full capture.
 
-    def __set_delay(self, delay: int) -> None:
-        """Emulate high-latency WAN.
+    def __simulate(self, delay: int, loss: float) -> None:
+        """Simulate network latency and packet loss.
 
         Parameters
         ----------
         delay : int
             The latency in milliseconds.
+        loss : float
+            The packet loss in percentage.
 
         Raises
         ------
@@ -347,7 +341,7 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        cmd = f"tc qdisc add dev s2-eth2 root netem delay {delay}ms"
+        cmd = f"tc qdisc add dev s2-eth2 root netem delay {delay}ms loss {loss}"
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 
@@ -373,9 +367,9 @@ class Experiment:
         """
         s_eth = f"s1-eth{s_eth_idx}"
         cmd = f"tshark -f 'tcp' -i {s_eth} " + (
-            f"-w {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__CAPTURE_FILE)} &"
+            f"-w {os.path.join(self.__output_base_dir, s_eth, self.__CAPTURE_FILE)} &"
             if self.__has_capture
-            else f"> {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)} &"
+            else f"> {os.path.join(self.__output_base_dir, s_eth, self.__OUTPUT_FILE)} &"
         )
         info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
@@ -405,6 +399,7 @@ class Experiment:
         has_wireshark: bool = False,
         interval: int = 100,
         limit: int = 0,
+        loss: float = LOSS_DEFAULT,
         n: int = 2,
         n_b: int = 512,
         n_b_unit: str = N_B_UNIT_DEFAULT,
@@ -446,19 +441,21 @@ class Experiment:
             For CoDel and PIE, the limit on the queue size in packets (the default is related to 10*BDP in the logic).
             For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
             For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
+        loss : float, optional
+            The packet loss in percentage (the default is defined by a constant `LOSS_DEFAULT`, and you should avoid setting a large value if you do not expect to wait a long time for the results).
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional
-            The number of bytes transferred from an iPerf client (the default is 1).
+            The number of bytes transferred from an iperf client (the default is 512).
         n_b_unit : str, optional
-            The unit of the number of bytes transferred from an iPerf client (the default is defined by a constant "N_B_UNIT_DEFAULT", and the value should be one of the uppercases "G", "K", and "M").
+            The unit of the number of bytes transferred from an iperf client (the default is defined by a constant `N_B_UNIT_DEFAULT`, and the value should be one of the uppercases "G", "K", and "M").
         perturb : int, optional
             The interval in seconds for the queue algorithm perturbation in SFQ (the default is 60).
         target : int, optional
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
         time : int, optional
-            The time in seconds for running an iPerf client (the default is 30).
+            The time in seconds for running an iperf client (the default is 30).
         tupdate : int, optional
             The frequency in milliseconds for PIE at which the system drop probability is calculated (the default is 15).
 
@@ -475,7 +472,7 @@ class Experiment:
 
         group = group.strip()
 
-        if group not in [GROUP_A, GROUP_B]:
+        if group not in [GROUP_A, GROUP_B, GROUP_C]:
             raise ValueError("invalid experiment group")
 
         if n < 1 or n > 5:
@@ -486,23 +483,23 @@ class Experiment:
         bw_unit = check_bw_unit(bw_unit=bw_unit)
         aqm = aqm.strip().lower()
         n_b_unit = n_b_unit.strip()
+        name = "baseline" if aqm == "" or aqm == "tbf" else aqm  # The experiment name.
         self.__group = group
         self.__has_capture = has_capture
         self.__has_wireshark = has_wireshark
         self.__n = n
-        self.__name = "baseline" if aqm == "" or aqm == "tbf" else aqm
         self.__output_base_dir = os.path.join(
-            OUTPUT_BASE_DIR, f"{self.__n}f", self.__group, f"{bw}{bw_unit}"
+            OUTPUT_BASE_DIR, f"{self.__n}f", self.__group, f"{bw}{bw_unit}", name
         )
 
-        info(f"*** Starting the experiment: {bw}{bw_unit} - {self.__name}\n")
+        info(f"*** Starting the experiment: {bw}{bw_unit} - {name}\n")
         self.__mn.start(has_clean_lab=has_clean_lab, n=self.__n)
 
         if self.__n > 1:
             self.__differentiate()
 
         self.__set_host_buffer()
-        self.__set_delay(delay=delay)
+        self.__simulate(delay=delay, loss=loss)
         self.__apply_qdisc(
             alpha=alpha,
             avpkt=avpkt,
@@ -532,10 +529,16 @@ class Experiment:
                         10 * self.__bdp / 1500
                     )  # A TCP packet holds 1500 bytes of data at most.
 
+            if loss < 0 or loss > 100:
+                loss = 0
+                warning(
+                    "Invalid packet loss. The experiment default is used instead.\n"
+                )
+
             if n_b_unit not in self.__N_B_UNITS.values():
                 n_b_unit = N_B_UNIT_DEFAULT
                 warning(
-                    "Invalid unit of the number of bytes transferred from an iPerf client. The experiment default is used instead.\n"
+                    "Invalid unit of the number of bytes transferred from an iperf client. The experiment default is used instead.\n"
                 )
 
             self.__apply_qdisc(
@@ -614,5 +617,6 @@ if __name__ == "__main__":
     experiment.clear_output()
     experiment.set_bdp()
     experiment.do(group=GROUP_A, has_capture=True, has_wireshark=True, n=1)
-    experiment.do(aqm="CoDel", group=GROUP_A, n=1)
-    experiment.do(group=GROUP_B, n=1)
+    experiment.do(group=GROUP_B)
+    # experiment.do(group=GROUP_C, loss=10, n=1)
+    # experiment.do(aqm="CoDel", group=GROUP_C, loss=10, n=1)
