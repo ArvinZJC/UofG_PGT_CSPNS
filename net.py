@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the simulation dumbbell network for experiments
-Version: 2.0.0.20211119
+Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-19 16:00:54
+LastEditTime: 2021-11-25 00:45:53
 '''
 """
 
@@ -29,17 +29,19 @@ class DumbbellTopo(Topo):
         n : int
             The number of the hosts on each side of the dumbbell topology.
         """
-        # Add 2 switches: the left for the sources and the right for the destinations.
+        # Add 3 switches (the left for the sources and the right for the destinations).
         s1 = self.addSwitch(name="s1")
         s2 = self.addSwitch(name="s2")
+        s3 = self.addSwitch(name="s3")
         self.addLink(s1, s2)
+        self.addLink(s2, s3)
 
         # Add the hosts on each side.
         for i in range(n):
             hl = self.addHost(name=f"hl{i + 1}")  # The left host (the source).
             hr = self.addHost(name=f"hr{i + 1}")  # The right host (the destination).
             self.addLink(hl, s1)
-            self.addLink(hr, s2)
+            self.addLink(hr, s3)
 
 
 class Net:

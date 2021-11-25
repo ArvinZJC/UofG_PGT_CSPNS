@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211124
+Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 23:49:29
+LastEditTime: 2021-11-25 00:43:15
 '''
 """
 
@@ -135,7 +135,7 @@ class Experiment:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
-        cmd = "tc qdisc add dev s1-eth1 "
+        cmd = "tc qdisc add dev s2-eth2 "
 
         if qdisc == "tbf":
             hz = int(
@@ -152,9 +152,11 @@ class Experiment:
             burst = int(
                 bw * (1000000000 if bw_unit == "gbit" else 1000000) / hz / 8
             )  # Reference: https://unix.stackexchange.com/a/100797
-            cmd += f"parent 1: handle 2: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
+            cmd += (
+                f"root handle 1: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
+            )
         else:
-            cmd += f"parent 2: handle 3: {qdisc} "
+            cmd += f"parent 1: handle 2: {qdisc} "
 
             if qdisc == "codel":
                 cmd += f"limit {limit} interval {interval}ms target {target}ms"
@@ -427,7 +429,7 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        cmd = f"tc qdisc add dev s1-eth1 root handle 1: netem delay {delay}ms"
+        cmd = f"tc qdisc add dev s1-eth1 root netem delay {delay}ms"
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 
@@ -749,4 +751,5 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(aqm="CoDel", group=GROUP_B)
+    experiment.do(group=GROUP_A)
+    experiment.do(aqm="CoDel", group=GROUP_A)
