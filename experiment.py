@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 19:37:53
+LastEditTime: 2021-11-25 19:49:58
 '''
 """
 
@@ -126,7 +126,7 @@ class Experiment:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
-        cmd = "tc qdisc add dev s2-eth2 "
+        cmd = "tc qdisc add dev s3-eth2 "
 
         if qdisc == "tbf":
             hz = int(
@@ -347,7 +347,7 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        cmd = f"tc qdisc add dev s1-eth1 root netem delay {delay}ms"
+        cmd = f"tc qdisc add dev s2-eth2 root netem delay {delay}ms"
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 

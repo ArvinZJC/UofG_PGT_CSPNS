@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 14:54:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 00:45:53
+LastEditTime: 2021-11-25 20:07:11
 '''
 """
 
@@ -29,19 +29,20 @@ class DumbbellTopo(Topo):
         n : int
             The number of the hosts on each side of the dumbbell topology.
         """
-        # Add 3 switches (the left for the sources and the right for the destinations).
-        s1 = self.addSwitch(name="s1")
-        s2 = self.addSwitch(name="s2")
-        s3 = self.addSwitch(name="s3")
-        self.addLink(s1, s2)
-        self.addLink(s2, s3)
+        # Add 4 switches (the left one for the sources and the right one for the destinations).
+        switches_idx = range(4)  # A list of the indexes of the switches.
+        switches = [self.addSwitch(name=f"s{i + 1}") for i in switches_idx]
+
+        for i in switches_idx:
+            if i + 1 < len(switches_idx):
+                self.addLink(switches[i], switches[i + 1])
 
         # Add the hosts on each side.
         for i in range(n):
             hl = self.addHost(name=f"hl{i + 1}")  # The left host (the source).
             hr = self.addHost(name=f"hr{i + 1}")  # The right host (the destination).
-            self.addLink(hl, s1)
-            self.addLink(hr, s3)
+            self.addLink(hl, switches[0])
+            self.addLink(hr, switches[-1])
 
 
 class Net:
