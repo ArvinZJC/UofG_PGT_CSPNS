@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211124
+Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 16:33:33
+LastEditTime: 2021-11-25 14:00:54
 '''
 """
 
@@ -38,6 +38,8 @@ class Eval:
     def __make_throughput_plot(
         self,
         base_dir: str,
+        bw: int,
+        bw_unit: str,
         colours,
         experiments: list,
         group: str,
@@ -50,6 +52,10 @@ class Eval:
         ----------
         base_dir : str
             The name of the output base directory.
+        bw : int
+            The bandwidth (the default is 1).
+        bw_unit : str
+            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         colours :
             A customised colour map.
         experiments : list
@@ -64,7 +70,7 @@ class Eval:
         info(
             "*** Plotting "
             + ("the baseline and SFQ's" if has_sfq_only else "each AQM algorithm's")
-            + f" flow throughput over time for the group: {group}\n"
+            + f" flow throughput over time: {n}f - {group} - {bw}{bw_unit}\n"
         )
         plt.figure()
         plt.title("Throughput over time" if has_sfq_only else "Fairness")
@@ -97,6 +103,29 @@ class Eval:
                 base_dir, "throughput_sfq.png" if has_sfq_only else "throughput.png"
             )
         )
+
+    def plot_cwnd(
+        self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 1
+    ) -> None:
+        """Plot the flow CWND over time for the specified experiment group.
+
+        Parameters
+        ----------
+        group : str
+            The experiment group.
+        bw : int, optional
+            The bandwidth (the default is 1).
+        bw_unit : str, optional
+            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
+        n : int, optional
+            The number of the hosts on each side of the dumbbell topology (the default is 1).
+        """
+        group = group.strip()
+        base_dir = os.path.join(self.__base_dir, f"{n}f", group, f"{bw}{bw_unit}")
+        info(f"*** Plotting the flow CWND over time: {n}f - {group} - {bw}{bw_unit}\n")
+        plt.figure()
+        plt.title("CWND over time")
+        # TODO
 
     def plot_throughput(
         self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 2
@@ -132,9 +161,9 @@ class Eval:
             )
 
     def plot_utilisation(
-        self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 2
+        self, group: str, bw: int = 1, bw_unit: str = "gbit", n: int = 1
     ) -> None:
-        """Plot each AQM algorithm's link utilisation by comparing the aggregate throughput with the available bandwidth for the specified experiment group.
+        """Plot each AQM algorithm's link utilisation for the specified experiment group.
 
         Parameters
         ----------
@@ -145,16 +174,16 @@ class Eval:
         bw_unit : str, optional
             The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         n : int, optional
-            The number of the hosts on each side of the dumbbell topology (the default is 2).
+            The number of the hosts on each side of the dumbbell topology (the default is 1).
         """
         bw_unit = check_bw_unit(bw_unit=bw_unit)
         group = group.strip()
+        base_dir = os.path.join(self.__base_dir, f"{n}f", group, f"{bw}{bw_unit}")
         info(
-            f"*** Plotting each AQM algorithm's link utilisation for the group: {group}\n"
+            f"*** Plotting each AQM algorithm's link utilisation: {n}f - {group} - {bw}{bw_unit}\n"
         )
         plt.figure()
         plt.title("Link utilisation")
-        base_dir = os.path.join(self.__base_dir, f"{n}f", group, f"{bw}{bw_unit}")
         experiments = sorted(
             [
                 entry.name

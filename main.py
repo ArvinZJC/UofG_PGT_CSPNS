@@ -1,11 +1,11 @@
 """
 '''
 Description: the entry to the experiments and evaluation
-Version: 2.0.0.20211124
+Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-24 13:31:07
+LastEditTime: 2021-11-25 13:42:26
 '''
 """
 
@@ -18,7 +18,6 @@ from experiment import (
     GROUP_B,
     OUTPUT_BASE_DIR,
     OUTPUT_FILE_FORMATTED,
-    QLEN_FILE,
 )
 from eval import Eval
 
@@ -40,21 +39,10 @@ info("\n*** 1 flow, specified time, 1Gbps/100Mbps/10Mbps, all\n\n")
 for bw in [1000, 100, 10]:
     bw = 1 if bw == 1000 else bw
     bw_unit = "gbit" if bw == 1 else "mbit"
-    has_monitor = True if bw == 1 else False
-    experiment.do(bw=bw, bw_unit=bw_unit, group=GROUP_B, has_monitor=has_monitor, n=1)
+    experiment.do(bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
     experiment.do(aqm="CoDel", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
-    experiment.do(
-        aqm="PIE",
-        bw=bw,
-        bw_unit=bw_unit,
-        group=GROUP_B,
-        n=1,
-        has_monitor=has_monitor,
-        target=15,
-    )
-    experiment.do(
-        aqm="RED", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1, has_monitor=has_monitor
-    )
+    experiment.do(aqm="PIE", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1, target=15)
+    experiment.do(aqm="RED", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
     experiment.do(aqm="SFQ", bw=bw, bw_unit=bw_unit, group=GROUP_B, n=1)
 
 info("\n*** 2 flows, same time, 1Gbps, all\n\n")

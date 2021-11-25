@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 00:43:15
+LastEditTime: 2021-11-25 13:40:12
 '''
 """
 
@@ -14,10 +14,9 @@ from math import ceil, floor
 from multiprocessing import Process
 from shutil import rmtree
 from subprocess import check_call, DEVNULL, PIPE, Popen, STDOUT
-from time import sleep, time
+from time import sleep
 import json
 import os
-import re
 
 from mininet.log import error, info, warning
 from mininet.util import quietRun
@@ -32,9 +31,6 @@ GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
-QLEN_FILE = (
-    "qlen.txt"  # The filename with the file extension of the queue length output file.
-)
 SUMMARY_FILE = (
     "summary.txt"  # The filename with the file extension of the summary file.
 )
@@ -68,9 +64,7 @@ class Experiment:
         self.__bdp = None
         self.__group = None  # The experiment group.
         self.__has_capture = None  # A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated.
-        self.__has_monitor = None  #
         self.__has_wireshark = None  # A flag indicating if the experiment should use Wireshark (TShark) to capture traffic.
-        self.__monitor = None  # The queue length monitor process.
         self.__mn = Net()
         self.__n = 0  # The number of the hosts on each side of the dumbbell topology.
         self.__name = None  # The experiment name.
@@ -178,9 +172,6 @@ class Experiment:
         """Create the output directories."""
         info("*** Creating the output directories if they do not exist\n")
         sections = [host.name for host in self.__mn.net.hosts]
-
-        if self.__has_monitor:
-            sections.append("s1-eth1")
 
         if self.__has_wireshark:
             sections.extend([f"s1-eth{i + 2}" for i in range(self.__n)])
@@ -318,29 +309,6 @@ class Experiment:
         )
         self.__mn.net.hosts[client_idx].cmd(cmd)
 
-    def __qlen_monitor(self) -> None:
-        """A multiprocessing task to run a queue length monitor."""
-        pattern = re.compile(r"backlog\s[^\s]+\s([\d]+)p")
-        s_eth = "s1-eth1"
-        cmd = f"tc -s qdisc show dev {s_eth}"
-        info(f'*** {s_eth} : ("{cmd}")\n')
-        pattern = re.compile(r"backlog\s[^\s]+\s([\d]+)p")
-        output_file = os.path.join(
-            self.__output_base_dir, self.__name, s_eth, QLEN_FILE
-        )
-        open(output_file, "w").write("")
-        init_time = time()
-
-        while True:
-            matches = re.findall(
-                pattern, Popen(cmd, shell=True, stdout=PIPE).stdout.read().decode()
-            )
-
-            if matches and len(matches) > 0:
-                open(output_file, "a").write(f"{time() - init_time} {matches[0]}\n")
-
-            sleep(0.01)
-
     def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
         """Run the iperf3 client(s) almost simultaneously if applicable.
 
@@ -377,12 +345,6 @@ class Experiment:
 
         for process in processes:
             process.join()
-
-    def __run_monitor(self) -> None:
-        """Run a queue length monitor."""
-        info("*** Running a queue length monitor\n")
-        self.__monitor = Process(target=self.__qlen_monitor)
-        self.__monitor.start()
 
     def __run_servers(self) -> None:
         """Run iperf3 in the server mode in the background."""
@@ -525,7 +487,6 @@ class Experiment:
         delay: int = 20,
         has_capture: bool = False,
         has_clean_lab: bool = False,
-        has_monitor: bool = False,
         has_wireshark: bool = False,
         interval: int = 100,
         limit: int = 0,
@@ -561,8 +522,6 @@ class Experiment:
             A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`)
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation network (the default is `False`).
-        has_monitor : bool, optional
-            A flag indicating if a queue length monitor should be established (the default is `False`).
         has_wireshark : bool, optional
             A flag indicating if the experiment should use Wireshark (TShark) to capture traffic (the default is `False`).
         interval : int, optional
@@ -614,7 +573,6 @@ class Experiment:
         n_b_unit = n_b_unit.strip()
         self.__group = group
         self.__has_capture = has_capture
-        self.__has_monitor = has_monitor
         self.__has_wireshark = has_wireshark
         self.__n = n
         self.__name = "baseline" if aqm == "" or aqm == "tbf" else aqm
@@ -685,14 +643,7 @@ class Experiment:
             self.__run_wireshark()
 
         self.__run_servers()
-
-        if self.__has_monitor:
-            self.__run_monitor()
-
         self.__run_clients(n_b=n_b, n_b_unit=n_b_unit, time=time)
-
-        if self.__has_monitor:
-            self.__monitor.terminate()
 
         if self.__has_wireshark:
             quietRun(
