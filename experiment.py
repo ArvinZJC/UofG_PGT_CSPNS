@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 18:34:41
+LastEditTime: 2021-11-25 18:42:10
 '''
 """
 
@@ -220,8 +220,8 @@ class Experiment:
                 )  # end time (sec), throughput (Mbps), CWND (MB), RTT (ms)
 
             open(output_formatted, "a").write(
-                f"{summary.get('end')} {summary.get('bits_per_second') / 1000000}\n"
-            )
+                f"{summary.get('end')} {summary.get('bits_per_second') / 1000000} {summary.get('max_snd_cwnd') / 1000000} {summary.get('mean_rtt') / 1000}\n"
+            )  # FCT (sec), mean throughput (Mbps), max CWND (MB), mean RTT (ms)
 
     def __iperf3_client(
         self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
