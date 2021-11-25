@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 18:42:10
+LastEditTime: 2021-11-25 19:37:53
 '''
 """
 
@@ -613,5 +613,6 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(group=GROUP_A, has_wireshark=True)
-    experiment.do(aqm="CoDel", group=GROUP_A)
+    experiment.do(group=GROUP_A, has_capture=True, has_wireshark=True, n=1)
+    experiment.do(aqm="CoDel", group=GROUP_A, n=1)
+    experiment.do(group=GROUP_B, n=1)
