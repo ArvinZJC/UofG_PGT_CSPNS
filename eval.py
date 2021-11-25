@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 16:19:44
+LastEditTime: 2021-11-25 18:32:41
 '''
 """
 
@@ -100,7 +100,7 @@ class Eval:
         plt.title("RTT over time")
 
         for experiment in experiments:
-            if experiment != self.__TBF:
+            if experiment != self.__TBF and experiment != self.__SFQ:
                 data = pd.read_csv(
                     os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
                     header=None,
@@ -115,7 +115,13 @@ class Eval:
         plt.savefig(os.path.join(base_dir, "rtt.png"))
 
     def __make_throughput_plot(
-        self, base_dir: str, colours: np.ndarray, experiments: list, has_sfq_only: bool
+        self,
+        base_dir: str,
+        bw_name: str,
+        colours: np.ndarray,
+        experiments: list,
+        has_baseline: bool,
+        has_sfq_only: bool,
     ) -> None:
         """Make a plot indicating the flow throughput over time.
 
@@ -123,24 +129,38 @@ class Eval:
         ----------
         base_dir : str
             The name of the output base directory.
+        bw_name : str
+            The name of the experiment's bandwidth.
         colours : numpy.ndarray
             A customised colour map.
         experiments : list
             A list of experiment names.
+        has_baseline : bool
+            A flag indicating if the baseline should be on the plot.
         has_sfq_only : bool
-            A flag indicating if the AQM algorithm on the plot only has SFQ.
+            A flag indicating if SFQ is the only AQM algorithm on the plot.
         """
         info(
             "*** Plotting "
-            + ("the baseline and SFQ's" if has_sfq_only else "each AQM algorithm's")
-            + f" flow throughput over time: {self.__FLOW_2} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
+            + (
+                "the baseline and SFQ"
+                if has_baseline
+                else ("SFQ" if has_sfq_only else "each AQM algorithm")
+            )
+            + f"'s flow throughput over time: {self.__FLOW_2} - {GROUP_B} - {bw_name}\n"
         )
         plt.figure()
-        plt.title("Throughput over time" if has_sfq_only else "Fairness")
+        plt.title(
+            f"Throughput over time{'' if has_baseline else ': SFQ'}"
+            if has_sfq_only
+            else "Fairness"
+        )
 
         for experiment, colour in zip(experiments, colours):
-            if (has_sfq_only and experiment in [self.__TBF, self.__SFQ]) or (
-                not has_sfq_only and experiment != self.__TBF
+            if (
+                (has_baseline and experiment in [self.__TBF, self.__SFQ])
+                or (not has_baseline and has_sfq_only and experiment == self.__SFQ)
+                or (not has_baseline and not has_sfq_only and experiment != self.__TBF)
             ):
                 for i in range(2):
                     data = pd.read_csv(
@@ -157,13 +177,18 @@ class Eval:
                         label=experiment if i == 0 else None,
                     )
 
-        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        if has_baseline == has_sfq_only:
+            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+            plt.tight_layout()
+
         plt.xlabel("time (sec)")
         plt.ylabel("throughput (Mbps)")
-        plt.tight_layout()
         plt.savefig(
             os.path.join(
-                base_dir, "throughput_sfq.png" if has_sfq_only else "throughput.png"
+                base_dir,
+                "throughput.png"
+                if has_baseline
+                else ("throughput_sfq.png" if has_sfq_only else "fairness.png"),
             )
         )
 
@@ -203,22 +228,30 @@ class Eval:
             )
 
     def plot_throughput(self) -> None:
-        """Plot the flow throughput over time for the group transferring data for the specified/same time length with 2 flows and the default bandwidth."""
-        base_dir = os.path.join(
-            self.__base_dir, self.__FLOW_2, GROUP_B, self.__BW_NAME_DEFAULT
-        )
-        experiments = sorted(
-            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-        )
-        colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
+        """Plot the flow throughput over time for the group transferring data for the specified/same time length with 2 flows and different bandwidth settings."""
+        group_base_dir = os.path.join(self.__base_dir, self.__FLOW_2, GROUP_B)
+        bw_names = [
+            entry.name for entry in os.scandir(group_base_dir) if entry.is_dir()
+        ]
 
-        for has_sfq_only in [True, False]:
-            self.__make_throughput_plot(
-                base_dir=base_dir,
-                colours=colours,
-                experiments=experiments,
-                has_sfq_only=has_sfq_only,
+        for bw_name in bw_names:
+            base_dir = os.path.join(group_base_dir, bw_name)
+            experiments = sorted(
+                [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
             )
+            colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
+
+            for has_baseline, has_sfq_only in zip(
+                [False, True, False], [True, True, False]
+            ):
+                self.__make_throughput_plot(
+                    base_dir=base_dir,
+                    bw_name=bw_name,
+                    colours=colours,
+                    experiments=experiments,
+                    has_baseline=has_baseline,
+                    has_sfq_only=has_sfq_only,
+                )
 
     def plot_utilisation(self) -> None:
         """Plot each AQM algorithm's link utilisation for the group transferring data for the specified/same time length with 1 flow and the default bandwidth."""

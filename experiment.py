@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 15:04:54
+LastEditTime: 2021-11-25 18:34:41
 '''
 """
 
@@ -31,9 +31,6 @@ GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
-SUMMARY_FILE = (
-    "summary.txt"  # The filename with the file extension of the summary file.
-)
 
 
 class Experiment:
@@ -226,47 +223,6 @@ class Experiment:
                 f"{summary.get('end')} {summary.get('bits_per_second') / 1000000}\n"
             )
 
-            if self.__has_wireshark:
-                s_eth = f"s1-eth{i + 2}"
-                is_valid = False
-                cmds = (
-                    [
-                        f"tshark -r {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__CAPTURE_FILE)} > {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)}"
-                    ]
-                    if self.__has_capture
-                    else []
-                )
-
-                if self.__group == GROUP_A:
-                    cmds.append(
-                        f"tail -1 {os.path.join(self.__output_base_dir, self.__name, s_eth, self.__OUTPUT_FILE)}"
-                        + " | awk '{print $2}' > "
-                        + os.path.join(
-                            self.__output_base_dir,
-                            self.__name,
-                            s_eth,
-                            OUTPUT_FILE_FORMATTED,
-                        )
-                    )
-
-                while not is_valid:
-                    for cmd in cmds:
-                        info(f'*** {s_eth} : ("{cmd}")\n')
-                        check_call(cmd, shell=True)
-
-                    if self.__group == GROUP_A:
-                        with open(
-                            os.path.join(
-                                self.__output_base_dir,
-                                self.__name,
-                                s_eth,
-                                OUTPUT_FILE_FORMATTED,
-                            )
-                        ) as f:
-                            is_valid = False if f.readline().strip() == "" else True
-                    else:
-                        is_valid = True
-
     def __iperf3_client(
         self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
     ) -> None:
@@ -406,47 +362,6 @@ class Experiment:
             host.cmdPrint(
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
-
-    def __summarise(self, n_b: int, n_b_unit: str) -> None:
-        """Summarise the flow completion time (FCT) and throughput for each relevant switch's interface in the summary file.
-
-        Parameters
-        ----------
-        n_b : int
-            The number of bytes transferred from an iPerf client.
-        n_b_unit : str
-            The unit of the number of bytes transferred from an iPerf client.
-        """
-        info(
-            "*** Summarising the FCT and the throughput for each relevant switch's interface in the summary file\n"
-        )
-        summary = self.__name
-
-        for i in range(self.__n):
-            with open(
-                os.path.join(
-                    self.__output_base_dir,
-                    self.__name,
-                    f"s1-eth{i + 2}",
-                    OUTPUT_FILE_FORMATTED,
-                )
-            ) as f:
-                fct = f.readline().strip()
-
-            if n_b_unit == "G":
-                volume = n_b * 8 * 1024  # GB => Mbit
-            elif n_b_unit == "K":
-                volume = n_b * 8 / 1024  # KB => Mbit
-            else:
-                volume = n_b * 8  # MB => Mbit
-
-            summary += f" {fct} {str(round(volume / float(fct)))}"
-
-        with open(
-            os.path.join(self.__output_base_dir, SUMMARY_FILE),
-            "a",
-        ) as f:
-            f.write(summary + "\n")
 
     def __wireshark(self, s_eth_idx: int) -> None:
         """A multiprocessing task to run Wireshark (TShark).
@@ -651,13 +566,9 @@ class Experiment:
             )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
 
         quietRun(
-            "killall -9 iperf3"
-        )  # Immediately terminate any iperf3 that might still be running.
+            "killall -15 iperf3"
+        )  # Softly terminate any iperf3 that might still be running.
         self.__format_output()
-
-        if self.__has_wireshark and self.__group == GROUP_A:
-            self.__summarise(n_b=n_b, n_b_unit=n_b_unit)
-
         self.__mn.stop()
         info("\n")
 
@@ -702,5 +613,5 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(group=GROUP_A)
+    experiment.do(group=GROUP_A, has_wireshark=True)
     experiment.do(aqm="CoDel", group=GROUP_A)
