@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 13:40:12
+LastEditTime: 2021-11-25 15:04:54
 '''
 """
 
@@ -220,7 +220,7 @@ class Experiment:
             for interval in intervals:
                 open(output_formatted, "a").write(
                     f"{interval.get('end')} {interval.get('bits_per_second') / 1000000} {interval.get('snd_cwnd') / 1000000} {interval.get('rtt') / 1000}\n"
-                )  # end time (sec), throughput (Mbps), CWND (Mbytes), RTT (ms)
+                )  # end time (sec), throughput (Mbps), CWND (MB), RTT (ms)
 
             open(output_formatted, "a").write(
                 f"{summary.get('end')} {summary.get('bits_per_second') / 1000000}\n"

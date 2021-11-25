@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 13:42:26
+LastEditTime: 2021-11-25 15:22:12
 '''
 """
 
@@ -26,7 +26,6 @@ cleanup()  # NOTE: This line should be commented out after dev.
 experiment = Experiment()
 experiment.clear_output()
 experiment.set_bdp()
-eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
 
 info("\n*** 1 flow, specified amount, 1Gbps, all\n\n")
 experiment.do(group=GROUP_A, has_wireshark=True, n=1)
@@ -51,5 +50,8 @@ experiment.do(aqm="CoDel", group=GROUP_B)
 experiment.do(aqm="PIE", group=GROUP_B, target=15)
 experiment.do(aqm="RED", group=GROUP_B)
 experiment.do(aqm="SFQ", group=GROUP_B)
-eval.plot_throughput(group=GROUP_B)
-eval.plot_utilisation(group=GROUP_B)
+
+eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
+eval.plot_cwnd()
+eval.plot_throughput()
+eval.plot_utilisation()
