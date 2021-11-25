@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 15:19:58
+LastEditTime: 2021-11-25 16:19:44
 '''
 """
 
@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 
 from experiment import GROUP_B
-from net import check_bw_unit
 
 
 class Eval:
@@ -33,6 +32,11 @@ class Eval:
         file_formatted : str
             The filename with the file extension of the formatted output file.
         """
+        self.__BW_NAME_DEFAULT = (
+            "1gbit"  # The default name of the experiment's bandwidth.
+        )
+        self.__FLOW_1 = "1f"  # The name of the experiment using 1 flow.
+        self.__FLOW_2 = "2f"  # The name of the experiment using 2 flows.
         self.__PIE = "pie"  # The name of the experiment for PIE.
         self.__RED = "red"  # The name of the experiment for RED.
         self.__SFQ = "sfq"  # The name of the experiment for SFQ.
@@ -41,14 +45,7 @@ class Eval:
         self.__file_formatted = file_formatted
 
     def __make_cwnd_plot(
-        self,
-        base_dir: str,
-        bw: int,
-        bw_unit: str,
-        colours: np.ndarray,
-        experiments: list,
-        n: int,
-        name: str,
+        self, base_dir: str, colours: np.ndarray, experiments: list, name: str
     ) -> None:
         """Make a plot indicating the flow CWND over time.
 
@@ -56,41 +53,27 @@ class Eval:
         ----------
         base_dir : str
             The name of the output base directory.
-        bw : int
-            The bandwidth (the default is 1).
-        bw_unit : str
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         colours : numpy.ndarray
             A customised colour map.
         experiments : list
             A list of experiment names.
-        n : int
-            The number of the hosts on each side of the dumbbell topology.
         name : str
             The name of an experiment for an AQM algorithm to compare with the baseline.
         """
         info(
-            f"*** Plotting the baseline and the AQM algorithm's flow CWND over time: {n}f - {GROUP_B} - {bw}{bw_unit} - {name}\n"
+            f"*** Plotting the baseline and the AQM algorithm's flow CWND over time: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT} - {name}\n"
         )
         plt.figure()
         plt.title("CWND over time")
 
         for experiment, colour in zip(experiments, colours):
             if experiment == self.__TBF or experiment == name:
-                for i in range(n):
-                    data = pd.read_csv(
-                        os.path.join(
-                            base_dir, experiment, f"hl{i + 1}", self.__file_formatted
-                        ),
-                        header=None,
-                        sep=" ",
-                    )[:-1][[0, 2]]
-                    plt.plot(
-                        data[0],
-                        data[2],
-                        color=colour,
-                        label=experiment if i == 0 else None,
-                    )
+                data = pd.read_csv(
+                    os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
+                    header=None,
+                    sep=" ",
+                )[:-1][[0, 2]]
+                plt.plot(data[0], data[2], color=colour, label=experiment)
 
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         plt.xlabel("time (sec)")
@@ -98,15 +81,41 @@ class Eval:
         plt.tight_layout()
         plt.savefig(os.path.join(base_dir, f"cwnd_{name}.png"))
 
+    def __make_rtt_plot(self, base_dir: str, bw_name: str, experiments: list) -> None:
+        """Make a plot indicating the flow RTT over time.
+
+        Parameters
+        ----------
+        base_dir : str
+            The name of the output base directory.
+        bw_name : str
+            The name of the experiment's bandwidth.
+        experiments : list
+            A list of experiment names.
+        """
+        info(
+            f"*** Plotting each AQM algorithm's RTT over time: {self.__FLOW_1} - {GROUP_B} - {bw_name}\n"
+        )
+        plt.figure()
+        plt.title("RTT over time")
+
+        for experiment in experiments:
+            if experiment != self.__TBF:
+                data = pd.read_csv(
+                    os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
+                    header=None,
+                    sep=" ",
+                )[:-1][[0, 3]]
+                plt.plot(data[0], data[3], label=experiment)
+
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.xlabel("time (s)")
+        plt.ylabel("RTT (ms)")
+        plt.tight_layout()
+        plt.savefig(os.path.join(base_dir, "rtt.png"))
+
     def __make_throughput_plot(
-        self,
-        base_dir: str,
-        bw: int,
-        bw_unit: str,
-        colours: np.ndarray,
-        experiments: list,
-        has_sfq_only: bool,
-        n: int,
+        self, base_dir: str, colours: np.ndarray, experiments: list, has_sfq_only: bool
     ) -> None:
         """Make a plot indicating the flow throughput over time.
 
@@ -114,23 +123,17 @@ class Eval:
         ----------
         base_dir : str
             The name of the output base directory.
-        bw : int
-            The bandwidth (the default is 1).
-        bw_unit : str
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         colours : numpy.ndarray
             A customised colour map.
         experiments : list
             A list of experiment names.
         has_sfq_only : bool
             A flag indicating if the AQM algorithm on the plot only has SFQ.
-        n : int
-            The number of the hosts on each side of the dumbbell topology.
         """
         info(
             "*** Plotting "
             + ("the baseline and SFQ's" if has_sfq_only else "each AQM algorithm's")
-            + f" flow throughput over time: {n}f - {GROUP_B} - {bw}{bw_unit}\n"
+            + f" flow throughput over time: {self.__FLOW_2} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
         )
         plt.figure()
         plt.title("Throughput over time" if has_sfq_only else "Fairness")
@@ -139,7 +142,7 @@ class Eval:
             if (has_sfq_only and experiment in [self.__TBF, self.__SFQ]) or (
                 not has_sfq_only and experiment != self.__TBF
             ):
-                for i in range(n):
+                for i in range(2):
                     data = pd.read_csv(
                         os.path.join(
                             base_dir, experiment, f"hl{i + 1}", self.__file_formatted
@@ -164,19 +167,11 @@ class Eval:
             )
         )
 
-    def plot_cwnd(self, bw: int = 1, bw_unit: str = "gbit", n: int = 1) -> None:
-        """Plot the flow CWND over time for the group transferring data for the specified/same time length.
-
-        Parameters
-        ----------
-        bw : int, optional
-            The bandwidth (the default is 1).
-        bw_unit : str, optional
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
-        n : int, optional
-            The number of the hosts on each side of the dumbbell topology (the default is 1).
-        """
-        base_dir = os.path.join(self.__base_dir, f"{n}f", GROUP_B, f"{bw}{bw_unit}")
+    def plot_cwnd(self) -> None:
+        """Plot the flow CWND over time for the group transferring data for the specified/same time length with 1 flow and the default bandwidth."""
+        base_dir = os.path.join(
+            self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
+        )
         experiments = sorted(
             [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
         )
@@ -184,28 +179,34 @@ class Eval:
 
         for name in [self.__PIE, self.__RED]:
             self.__make_cwnd_plot(
-                base_dir=base_dir,
-                bw=bw,
-                bw_unit=bw_unit,
-                colours=colours,
-                experiments=experiments,
-                n=n,
-                name=name,
+                base_dir=base_dir, colours=colours, experiments=experiments, name=name
             )
 
-    def plot_throughput(self, bw: int = 1, bw_unit: str = "gbit", n: int = 2) -> None:
-        """Plot the flow throughput over time for the group transferring data for the specified/same time length.
+    def plot_rtt(self) -> None:
+        """Plot the flow RTT over time for the group transferring data for the specified/same time length with 1 flow and different bandwidth settings."""
+        group_base_dir = os.path.join(self.__base_dir, self.__FLOW_1, GROUP_B)
+        bw_names = [
+            entry.name for entry in os.scandir(group_base_dir) if entry.is_dir()
+        ]
 
-        Parameters
-        ----------
-        bw : int, optional
-            The bandwidth (the default is 1).
-        bw_unit : str, optional
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
-        n : int, optional
-            The number of the hosts on each side of the dumbbell topology (the default is 2).
-        """
-        base_dir = os.path.join(self.__base_dir, f"{n}f", GROUP_B, f"{bw}{bw_unit}")
+        for bw_name in bw_names:
+            base_dir = os.path.join(group_base_dir, bw_name)
+            experiments = sorted(
+                [
+                    entry.name
+                    for entry in os.scandir(base_dir)
+                    if entry.is_dir() and entry.name != self.__TBF
+                ]
+            )
+            self.__make_rtt_plot(
+                base_dir=base_dir, bw_name=bw_name, experiments=experiments
+            )
+
+    def plot_throughput(self) -> None:
+        """Plot the flow throughput over time for the group transferring data for the specified/same time length with 2 flows and the default bandwidth."""
+        base_dir = os.path.join(
+            self.__base_dir, self.__FLOW_2, GROUP_B, self.__BW_NAME_DEFAULT
+        )
         experiments = sorted(
             [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
         )
@@ -214,33 +215,16 @@ class Eval:
         for has_sfq_only in [True, False]:
             self.__make_throughput_plot(
                 base_dir=base_dir,
-                bw=bw,
-                bw_unit=bw_unit,
                 colours=colours,
                 experiments=experiments,
                 has_sfq_only=has_sfq_only,
-                n=n,
             )
 
-    def plot_utilisation(self, bw: int = 1, bw_unit: str = "gbit", n: int = 1) -> None:
-        """Plot each AQM algorithm's link utilisation for the group transferring data for the specified/same time length.
-
-        Parameters
-        ----------
-        bw : int, optional
-            The bandwidth (the default is 1).
-        bw_unit : str, optional
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
-        n : int, optional
-            The number of the hosts on each side of the dumbbell topology (the default is 1).
-        """
-        bw_unit = check_bw_unit(bw_unit=bw_unit)
-        base_dir = os.path.join(self.__base_dir, f"{n}f", GROUP_B, f"{bw}{bw_unit}")
-        info(
-            f"*** Plotting each AQM algorithm's link utilisation: {n}f - {GROUP_B} - {bw}{bw_unit}\n"
+    def plot_utilisation(self) -> None:
+        """Plot each AQM algorithm's link utilisation for the group transferring data for the specified/same time length with 1 flow and the default bandwidth."""
+        base_dir = os.path.join(
+            self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
-        plt.figure()
-        plt.title("Link utilisation")
         experiments = sorted(
             [
                 entry.name
@@ -248,21 +232,21 @@ class Eval:
                 if entry.is_dir() and entry.name != self.__TBF
             ]
         )
-        results = []
-
-        for experiment in experiments:
-            throughput = 0
-
-            for i in range(n):
-                throughput += pd.read_csv(
-                    os.path.join(
-                        base_dir, experiment, f"hl{i + 1}", self.__file_formatted
-                    ),
-                    header=None,
-                    sep=" ",
-                )[-1:][[1]][1]
-
-            results.append(throughput / (bw * 1000 if bw_unit == "gbit" else bw) * 100)
+        results = [
+            pd.read_csv(
+                os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
+                header=None,
+                sep=" ",
+            )[-1:][[1]][1]
+            / 1000
+            * 100
+            for experiment in experiments
+        ]
+        info(
+            f"*** Plotting each AQM algorithm's link utilisation: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
+        )
+        plt.figure()
+        plt.title("Link utilisation")
 
         for experiment, result in zip(experiments, results):
             plt.bar(experiment, result)
@@ -281,5 +265,6 @@ if __name__ == "__main__":
     setLogLevel("info")
     eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
     eval.plot_cwnd()
+    eval.plot_rtt()
     eval.plot_throughput()
     eval.plot_utilisation()

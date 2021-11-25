@@ -5,7 +5,7 @@ Version: 2.0.0.20211125
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 15:22:12
+LastEditTime: 2021-11-25 16:21:11
 '''
 """
 
@@ -51,7 +51,9 @@ experiment.do(aqm="PIE", group=GROUP_B, target=15)
 experiment.do(aqm="RED", group=GROUP_B)
 experiment.do(aqm="SFQ", group=GROUP_B)
 
+info("\n*** Starting evaluation\n\n")
 eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
 eval.plot_cwnd()
+eval.plot_rtt()
 eval.plot_throughput()
 eval.plot_utilisation()
