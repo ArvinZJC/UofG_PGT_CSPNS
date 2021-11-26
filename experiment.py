@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211125
+Version: 2.0.0.20211126
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 23:10:59
+LastEditTime: 2021-11-26 17:30:00
 '''
 """
 
@@ -28,7 +28,6 @@ ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
-GROUP_C = "s_packets"  # Group C: transfer the specified/same number of packets.
 LOSS_DEFAULT = 0
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
@@ -62,8 +61,8 @@ class Experiment:
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__group = None  # The experiment group.
-        self.__has_capture = None  # A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated.
-        self.__has_wireshark = None  # A flag indicating if the experiment should use Wireshark (TShark) to capture traffic.
+        self.__has_capture = None  # A flag indicating if the PCAPNG capture file from TShark should be generated.
+        self.__has_tshark = None  # A flag indicating if the experiment should use TShark to capture traffic.
         self.__mn = Net()
         self.__n = 0  # The number of the hosts on each side of the dumbbell topology.
         self.__output_base_dir = None  # The experiment-specific output base directory.
@@ -166,12 +165,49 @@ class Experiment:
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 
+    def __client(self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int) -> None:
+        """A multiprocessing task to run an iperf3 client.
+
+        Parameters
+        ----------
+        client_idx : int
+            The index of the client host.
+        n_b : int
+            The number of bytes transferred from an iperf3 client.
+        n_b_unit_idx : int
+            The index of the unit of the number of bytes transferred from an iperf3 client.
+        time : int
+            The time in seconds for running an iperf3 client.
+        """
+        cmd = (
+            f"iperf3 -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -J "
+            + (
+                f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
+                if self.__group == GROUP_A
+                else f"-t {time}"
+            )
+            + " > "
+            + os.path.join(
+                self.__output_base_dir, f"hl{client_idx + 1}", self.__OUTPUT_JFILE
+            )
+        )
+        info(
+            f'*** hl{client_idx + 1} : ("{cmd}")\nIt starts at {datetime.now()}'
+            + (
+                ""
+                if self.__group == GROUP_A
+                else f" and should last for {time} second(s)"
+            )
+            + ".\n"
+        )
+        self.__mn.net.hosts[client_idx].cmd(cmd)
+
     def __create_output_dir(self) -> None:
         """Create the output directories."""
         info("*** Creating the output directories if they do not exist\n")
         sections = [host.name for host in self.__mn.net.hosts]
 
-        if self.__has_wireshark:
+        if self.__has_tshark:
             sections.extend([f"s1-eth{i + 2}" for i in range(self.__n)])
 
         for section in sections:
@@ -221,45 +257,6 @@ class Experiment:
                 f"{summary.get('end')} {summary.get('bits_per_second') / 1000000} {summary.get('max_snd_cwnd') / 1000000} {summary.get('mean_rtt') / 1000}\n"
             )  # FCT (sec), mean throughput (Mbps), max CWND (MB), mean RTT (ms)
 
-    def __iperf3_client(
-        self, client_idx: int, n_b: int, n_b_unit_idx: int, time: int
-    ) -> None:
-        """A multiprocessing task to run an iperf3 client.
-
-        Parameters
-        ----------
-        client_idx : int
-            The index of the client host.
-        n_b : int
-            The number of bytes transferred from an iperf3 client.
-        n_b_unit_idx : int
-            The index of the unit of the number of bytes transferred from an iperf3 client.
-        time : int
-            The time in seconds for running an iperf3 client.
-        """
-        cmd = (
-            f"iperf3 -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -J "
-            + (
-                f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
-                if self.__group == GROUP_A
-                else f"-t {time}"
-            )
-            + " > "
-            + os.path.join(
-                self.__output_base_dir, f"hl{client_idx + 1}", self.__OUTPUT_JFILE
-            )
-        )
-        info(
-            f'*** hl{client_idx + 1} : ("{cmd}")\nIt starts at {datetime.now()}'
-            + (
-                ""
-                if self.__group == GROUP_A
-                else f" and should last for {time} second(s)"
-            )
-            + ".\n"
-        )
-        self.__mn.net.hosts[client_idx].cmd(cmd)
-
     def __run_clients(self, n_b: int, n_b_unit: str, time: int) -> None:
         """Run the iperf3 client(s) almost simultaneously if applicable.
 
@@ -281,7 +278,7 @@ class Experiment:
 
         for i in range(self.__n):
             process = Process(
-                target=self.__iperf3_client,
+                target=self.__client,
                 args=(
                     i,
                     n_b,
@@ -310,13 +307,13 @@ class Experiment:
                 + " &"
             )  # Add "&" in the end to run in the background.
 
-    def __run_wireshark(self) -> None:
-        """Run Wireshark (TShark) in the background."""
-        info("*** Running Wireshark (TShark) in the background\n")
+    def __run_tshark(self) -> None:
+        """Run TShark in the background."""
+        info("*** Running TShark in the background\n")
         processes = []
 
         for i in range(self.__n):
-            process = Process(target=self.__wireshark, args=(i + 2,))
+            process = Process(target=self.__tshark, args=(i + 2,))
             processes.append(process)
             process.start()
 
@@ -357,8 +354,8 @@ class Experiment:
                 f"sysctl -w net.ipv4.tcp_wmem='10240 87380 {20 * self.__bdp}'"
             )
 
-    def __wireshark(self, s_eth_idx: int) -> None:
-        """A multiprocessing task to run Wireshark (TShark).
+    def __tshark(self, s_eth_idx: int) -> None:
+        """A multiprocessing task to run TShark.
 
         Parameters
         ----------
@@ -366,10 +363,14 @@ class Experiment:
             The index of a switch's interface for TCP traffic capture.
         """
         s_eth = f"s1-eth{s_eth_idx}"
-        cmd = f"tshark -f 'tcp' -i {s_eth} " + (
-            f"-w {os.path.join(self.__output_base_dir, s_eth, self.__CAPTURE_FILE)} &"
-            if self.__has_capture
-            else f"> {os.path.join(self.__output_base_dir, s_eth, self.__OUTPUT_FILE)} &"
+        cmd = (
+            f"tshark -f 'tcp' -i {s_eth} "
+            + (
+                f"-w {os.path.join(self.__output_base_dir, s_eth, self.__CAPTURE_FILE)}"
+                if self.__has_capture
+                else f"> {os.path.join(self.__output_base_dir, s_eth, self.__OUTPUT_FILE)}"
+            )
+            + " &"
         )
         info(f'*** {s_eth} : ("{cmd}")\nIt starts at {datetime.now()}.\n')
         check_call(cmd, shell=True, stderr=STDOUT, stdout=DEVNULL)
@@ -396,7 +397,7 @@ class Experiment:
         delay: int = 20,
         has_capture: bool = False,
         has_clean_lab: bool = False,
-        has_wireshark: bool = False,
+        has_tshark: bool = False,
         interval: int = 100,
         limit: int = 0,
         loss: float = LOSS_DEFAULT,
@@ -429,11 +430,11 @@ class Experiment:
         delay : int, optional
             The latency in milliseconds (the default is 20).
         has_capture : bool, optional
-            A flag indicating if the PCAPNG capture file from Wireshark (TShark) should be generated (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`)
+            A flag indicating if the PCAPNG file should be generated using TShark (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`).
         has_clean_lab : bool, optional
             A flag indicating if the junk should be cleaned up to avoid any potential error before creating the simulation network (the default is `False`).
-        has_wireshark : bool, optional
-            A flag indicating if the experiment should use Wireshark (TShark) to capture traffic (the default is `False`).
+        has_tshark : bool, optional
+            A flag indicating if the experiment should use TShark to capture traffic (the default is `False`).
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
@@ -472,7 +473,7 @@ class Experiment:
 
         group = group.strip()
 
-        if group not in [GROUP_A, GROUP_B, GROUP_C]:
+        if group not in [GROUP_A, GROUP_B]:
             raise ValueError("invalid experiment group")
 
         if n < 1 or n > 5:
@@ -486,7 +487,7 @@ class Experiment:
         name = "baseline" if aqm == "" or aqm == "tbf" else aqm  # The experiment name.
         self.__group = group
         self.__has_capture = has_capture
-        self.__has_wireshark = has_wireshark
+        self.__has_tshark = has_tshark
         self.__n = n
         self.__output_base_dir = os.path.join(
             OUTPUT_BASE_DIR, f"{self.__n}f", self.__group, f"{bw}{bw_unit}", name
@@ -557,16 +558,16 @@ class Experiment:
 
         self.__create_output_dir()
 
-        if self.__has_wireshark:
-            self.__run_wireshark()
+        if self.__has_tshark:
+            self.__run_tshark()
 
         self.__run_servers()
         self.__run_clients(n_b=n_b, n_b_unit=n_b_unit, time=time)
 
-        if self.__has_wireshark:
+        if self.__has_tshark:
             quietRun(
-                "killall -15 tshark"
-            )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
+                f"killall -15 tshark"
+            )  # Softly terminate any tcpdump/TShark that might still be running. Put the code here to reduce useless capture.
 
         quietRun(
             "killall -15 iperf3"
@@ -616,7 +617,11 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(group=GROUP_A, has_capture=True, has_wireshark=True, n=1)
-    experiment.do(group=GROUP_B)
-    # experiment.do(group=GROUP_C, loss=10, n=1)
-    # experiment.do(aqm="CoDel", group=GROUP_C, loss=10, n=1)
+    experiment.do(group=GROUP_A, n=1)
+
+    """
+    experiment.do(aqm="CoDel", group=GROUP_A, n=1)
+    experiment.do(aqm="PIE", group=GROUP_A, n=1, target=15)
+    experiment.do(aqm="RED", group=GROUP_A, n=1)
+    experiment.do(aqm="SFQ", group=GROUP_A, n=1)
+    """
