@@ -1,11 +1,11 @@
 """
 '''
 Description: the entry to the experiments and evaluation
-Version: 2.0.0.20211125
+Version: 2.0.0.20211126
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-25 23:31:06
+LastEditTime: 2021-11-26 17:36:51
 '''
 """
 
@@ -29,11 +29,11 @@ experiment.set_bdp()
 bw_settings = [1000, 100, 10]
 
 info("\n*** 1 flow, specified amount, 1 Gbps, all\n\n")
-experiment.do(group=GROUP_A, has_wireshark=True, n=1)
-experiment.do(aqm="CoDel", group=GROUP_A, has_wireshark=True, n=1)
-experiment.do(aqm="PIE", group=GROUP_A, has_wireshark=True, n=1, target=15)
-experiment.do(aqm="RED", group=GROUP_A, has_wireshark=True, n=1)
-experiment.do(aqm="SFQ", group=GROUP_A, has_wireshark=True, n=1)
+experiment.do(group=GROUP_A, has_tshark=True, n=1)
+experiment.do(aqm="CoDel", group=GROUP_A, has_tshark=True, n=1)
+experiment.do(aqm="PIE", group=GROUP_A, has_tshark=True, n=1, target=15)
+experiment.do(aqm="RED", group=GROUP_A, has_tshark=True, n=1)
+experiment.do(aqm="SFQ", group=GROUP_A, has_tshark=True, n=1)
 
 info("\n*** 1 flow, specified time, 1 Gbps/100 Mbps/10 Mbps, all\n\n")
 for bw in bw_settings:
