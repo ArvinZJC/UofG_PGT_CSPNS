@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211126
+Version: 2.0.0.20211127
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-26 18:45:55
+LastEditTime: 2021-11-27 00:59:13
 '''
 """
 
@@ -22,13 +22,15 @@ from experiment import GROUP_A, GROUP_B
 class Eval:
     """The class for defining the utilities of evaluation."""
 
-    def __init__(self, base_dir: str, file_formatted: str) -> None:
+    def __init__(self, base_dir: str, file: str, file_formatted: str) -> None:
         """The constructor of the class for defining the utilities of evaluation.
 
         Parameters
         ----------
         base_dir : str
             The name of the output base directory.
+        file : str
+            The filename with the file extension of the output file.
         file_formatted : str
             The filename with the file extension of the formatted output file.
         """
@@ -43,6 +45,7 @@ class Eval:
         self.__SFQ = "sfq"  # The name of the experiment for SFQ.
         self.__TBF = "baseline"  # The name of the experiment for the baseline.
         self.__base_dir = base_dir
+        self.__file = file
         self.__file_formatted = file_formatted
 
     def __make_cwnd_plot(
@@ -196,10 +199,17 @@ class Eval:
                 base_dir=base_dir, colours=colours, experiments=experiments, name=name
             )
 
-    def plot_fct(self) -> None:
-        """Plot FCT for the group transferring the specified amount of data with 1 flow and the default bandwidth."""
+    def plot_fct(self, group_suffix: str = "") -> None:
+        """Plot FCT for the group transferring the specified amount of data with 1 flow and the default bandwidth.
+
+        Parameters
+        ----------
+        group_suffix : str, optional
+            The suffix added to the experiment group for the output directory (the default is an empty string).
+        """
+        group = GROUP_A + group_suffix
         base_dir = os.path.join(
-            self.__base_dir, self.__FLOW_1, GROUP_A, self.__BW_NAME_DEFAULT
+            self.__base_dir, self.__FLOW_1, group, self.__BW_NAME_DEFAULT
         )
         experiments = sorted(
             [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
@@ -213,7 +223,7 @@ class Eval:
             for experiment in experiments
         ]
         info(
-            f"*** Plotting FCT: {self.__FLOW_1} - {GROUP_A} - {self.__BW_NAME_DEFAULT}\n"
+            f"*** Plotting FCT: {self.__FLOW_1} - {group} - {self.__BW_NAME_DEFAULT}\n"
         )
         plt.figure()
         plt.title("FCT achieved in each experiment")
@@ -225,6 +235,41 @@ class Eval:
         plt.ylabel("FCT (sec)")
         plt.ylim(np.min(results) - 1, np.max(results) + 0.2)
         plt.savefig(os.path.join(base_dir, "fct.png"))
+
+    def plot_rr(self, group_suffix: str = "") -> None:
+        """Plot RR for the group transferring the specified amount of data with 1 flow and the default bandwidth.
+
+        Parameters
+        ----------
+        group_suffix : str, optional
+            The suffix added to the experiment group for the output directory (the default is an empty string).
+        """
+        group = GROUP_A + group_suffix
+        base_dir = os.path.join(
+            self.__base_dir, self.__FLOW_1, group, self.__BW_NAME_DEFAULT
+        )
+        experiments = sorted(
+            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
+        )
+        results = []
+
+        for experiment in experiments:
+            lines = open(
+                os.path.join(base_dir, experiment, "s1-eth2", self.__file), "r"
+            ).readlines()
+            retransmissions = [line for line in lines if "Retransmission" in line]
+            results.append(len(retransmissions) / len(lines) * 100)
+
+        info(f"*** Plotting RR: {self.__FLOW_1} - {group} - {self.__BW_NAME_DEFAULT}\n")
+        plt.figure()
+        plt.title("RR achieved in each experiment")
+
+        for experiment, result in zip(experiments, results):
+            plt.bar(experiment, result)
+
+        plt.xlabel("experiment")
+        plt.ylabel("RR (%)")
+        plt.savefig(os.path.join(base_dir, "rr.png"))
 
     def plot_rtt(self) -> None:
         """Plot RTT over time for the group transferring data for the specified time length with 1 flow and different bandwidth settings."""
@@ -304,12 +349,17 @@ class Eval:
 # Simple test purposes only.
 if __name__ == "__main__":
     from mininet.log import setLogLevel
-    from experiment import OUTPUT_BASE_DIR, OUTPUT_FILE_FORMATTED
+    from experiment import OUTPUT_BASE_DIR, OUTPUT_FILE, OUTPUT_FILE_FORMATTED
 
+    group_suffix = "_sp"
     setLogLevel("info")
-    eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
+    eval = Eval(
+        base_dir=OUTPUT_BASE_DIR, file=OUTPUT_FILE, file_formatted=OUTPUT_FILE_FORMATTED
+    )
     eval.plot_cwnd()
     eval.plot_fct()
+    eval.plot_fct(group_suffix=group_suffix)
+    eval.plot_rr(group_suffix=group_suffix)
     eval.plot_rtt()
     eval.plot_throughput()
     eval.plot_utilisation()

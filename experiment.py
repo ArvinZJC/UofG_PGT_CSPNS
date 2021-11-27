@@ -5,7 +5,7 @@ Version: 2.0.0.20211127
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-27 00:04:34
+LastEditTime: 2021-11-27 00:20:41
 '''
 """
 
@@ -30,6 +30,7 @@ GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
+OUTPUT_FILE = "result.txt"  # The filename with the file extension of the output file.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
 
 
@@ -47,9 +48,6 @@ class Experiment:
             1: "K",
             2: "M",
         }  # The dictionary of the units of the number of bytes transferred from an iperf client.
-        self.__OUTPUT_FILE = (
-            "result.txt"  # The filename with the file extension of the output file.
-        )
         self.__OUTPUT_JFILE = "result.json"  # The filename with the file extension of the output json file.
         self.__QDISC = [
             "codel",
@@ -301,7 +299,7 @@ class Experiment:
             self.__mn.net.hosts[i].cmdPrint(
                 "iperf3 -i 0 -s > "
                 + os.path.join(
-                    self.__output_base_dir, f"hr{i - self.__n + 1}", self.__OUTPUT_FILE
+                    self.__output_base_dir, f"hr{i - self.__n + 1}", OUTPUT_FILE
                 )
                 + " &"
             )  # Add "&" in the end to run in the background.
@@ -365,7 +363,7 @@ class Experiment:
             + (
                 f"-w {os.path.join(self.__output_base_dir, s_eth, self.__CAPTURE_FILE)}"
                 if self.__has_capture
-                else f"> {os.path.join(self.__output_base_dir, s_eth, self.__OUTPUT_FILE)}"
+                else f"> {os.path.join(self.__output_base_dir, s_eth, OUTPUT_FILE)}"
             )
             + " &"
         )

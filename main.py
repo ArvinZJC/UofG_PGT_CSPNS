@@ -5,7 +5,7 @@ Version: 2.0.0.20211127
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-27 00:06:34
+LastEditTime: 2021-11-27 00:35:50
 '''
 """
 
@@ -17,6 +17,7 @@ from experiment import (
     GROUP_A,
     GROUP_B,
     OUTPUT_BASE_DIR,
+    OUTPUT_FILE,
     OUTPUT_FILE_FORMATTED,
 )
 from eval import Eval
@@ -95,9 +96,13 @@ for bw in bw_settings:
     experiment.do(aqm="SFQ", bw=bw, bw_unit=bw_unit, group=GROUP_B)
 
 info("\n*** Starting evaluation\n\n")
-eval = Eval(base_dir=OUTPUT_BASE_DIR, file_formatted=OUTPUT_FILE_FORMATTED)
+eval = Eval(
+    base_dir=OUTPUT_BASE_DIR, file=OUTPUT_FILE, file_formatted=OUTPUT_FILE_FORMATTED
+)
 eval.plot_cwnd()
 eval.plot_fct()
+eval.plot_fct(group_suffix=group_suffix)
+eval.plot_rr(group_suffix=group_suffix)
 eval.plot_rtt()
 eval.plot_throughput()
 eval.plot_utilisation()
