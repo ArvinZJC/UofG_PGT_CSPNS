@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211126
+Version: 2.0.0.20211127
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-26 17:30:00
+LastEditTime: 2021-11-27 00:04:34
 '''
 """
 
@@ -28,7 +28,6 @@ ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
-LOSS_DEFAULT = 0
 N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
@@ -61,7 +60,7 @@ class Experiment:
         ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__group = None  # The experiment group.
-        self.__has_capture = None  # A flag indicating if the PCAPNG capture file from TShark should be generated.
+        self.__has_capture = None  # A flag indicating if the PCAPNG file should be generated using TShark.
         self.__has_tshark = None  # A flag indicating if the experiment should use TShark to capture traffic.
         self.__mn = Net()
         self.__n = 0  # The number of the hosts on each side of the dumbbell topology.
@@ -180,11 +179,11 @@ class Experiment:
             The time in seconds for running an iperf3 client.
         """
         cmd = (
-            f"iperf3 -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -J "
+            f"iperf3 -c {self.__mn.net.hosts[client_idx + self.__n].IP()} -J -"
             + (
-                f"-n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
+                f"n {n_b}{self.__N_B_UNITS.get(n_b_unit_idx)}"
                 if self.__group == GROUP_A
-                else f"-t {time}"
+                else f"t {time}"
             )
             + " > "
             + os.path.join(
@@ -322,15 +321,13 @@ class Experiment:
 
         sleep(1)  # Wait for 1 second to ensure full capture.
 
-    def __simulate(self, delay: int, loss: float) -> None:
+    def __simulate(self, delay: int) -> None:
         """Simulate network latency and packet loss.
 
         Parameters
         ----------
         delay : int
             The latency in milliseconds.
-        loss : float
-            The packet loss in percentage.
 
         Raises
         ------
@@ -338,7 +335,7 @@ class Experiment:
             The executed command fails, so the delay cannot be set. Check the command.
         """
         info("*** Emulating high-latency WAN\n")
-        cmd = f"tc qdisc add dev s2-eth2 root netem delay {delay}ms loss {loss}"
+        cmd = f"tc qdisc add dev s2-eth2 root netem delay {delay}ms"
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
 
@@ -395,14 +392,14 @@ class Experiment:
         bw: int = 1,
         bw_unit: str = "gbit",
         delay: int = 20,
+        group_suffix: str = "",
         has_capture: bool = False,
         has_clean_lab: bool = False,
         has_tshark: bool = False,
         interval: int = 100,
         limit: int = 0,
-        loss: float = LOSS_DEFAULT,
         n: int = 2,
-        n_b: int = 512,
+        n_b: int = 500,
         n_b_unit: str = N_B_UNIT_DEFAULT,
         perturb: int = 60,
         target: int = 5,
@@ -429,6 +426,8 @@ class Experiment:
             The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
         delay : int, optional
             The latency in milliseconds (the default is 20).
+        group_suffix: str, optional
+            The suffix added to the experiment group for the output directory (the default is an empty string).
         has_capture : bool, optional
             A flag indicating if the PCAPNG file should be generated using TShark (the default is `False`, and the disk space should be sufficient if the parameter is set to `True`).
         has_clean_lab : bool, optional
@@ -438,16 +437,12 @@ class Experiment:
         interval : int, optional
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
-            The default is 0.
-            For CoDel and PIE, the limit on the queue size in packets (the default is related to 10*BDP in the logic).
-            For RED, the limit on the queue size in bytes (the default is 10*BDP in the logic).
-            For TBF, the number of bytes that can be queued waiting for tokens to become available (the default is 10*BDP in the logic).
-        loss : float, optional
-            The packet loss in percentage (the default is defined by a constant `LOSS_DEFAULT`, and you should avoid setting a large value if you do not expect to wait a long time for the results).
+            The number of bytes that can be queued waiting for tokens to become available (the default is 0, which means that it will be determined accordingly by the program).
+            This parameter is directly used for RED and TBF. CoDel and PIE require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional
-            The number of bytes transferred from an iperf client (the default is 512).
+            The number of bytes transferred from an iperf client (the default is 500).
         n_b_unit : str, optional
             The unit of the number of bytes transferred from an iperf client (the default is defined by a constant `N_B_UNIT_DEFAULT`, and the value should be one of the uppercases "G", "K", and "M").
         perturb : int, optional
@@ -483,6 +478,7 @@ class Experiment:
 
         bw_unit = check_bw_unit(bw_unit=bw_unit)
         aqm = aqm.strip().lower()
+        limit = 10 * self.__bdp if limit == 0 else limit
         n_b_unit = n_b_unit.strip()
         name = "baseline" if aqm == "" or aqm == "tbf" else aqm  # The experiment name.
         self.__group = group
@@ -490,7 +486,11 @@ class Experiment:
         self.__has_tshark = has_tshark
         self.__n = n
         self.__output_base_dir = os.path.join(
-            OUTPUT_BASE_DIR, f"{self.__n}f", self.__group, f"{bw}{bw_unit}", name
+            OUTPUT_BASE_DIR,
+            f"{self.__n}f",
+            f"{self.__group}{group_suffix}",
+            f"{bw}{bw_unit}",
+            name,
         )
 
         info(f"*** Starting the experiment: {bw}{bw_unit} - {name}\n")
@@ -500,7 +500,7 @@ class Experiment:
             self.__differentiate()
 
         self.__set_host_buffer()
-        self.__simulate(delay=delay, loss=loss)
+        self.__simulate(delay=delay)
         self.__apply_qdisc(
             alpha=alpha,
             avpkt=avpkt,
@@ -508,7 +508,7 @@ class Experiment:
             bw=bw,
             bw_unit=bw_unit,
             interval=interval,
-            limit=10 * self.__bdp if limit == 0 else limit,
+            limit=limit,
             perturb=perturb,
             target=target,
             tupdate=tupdate,
@@ -522,19 +522,10 @@ class Experiment:
                     "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
                 )
 
-            if limit == 0:
-                if aqm == "red":
-                    limit = 10 * self.__bdp
-                else:
-                    limit = round(
-                        10 * self.__bdp / 1500
-                    )  # A TCP packet holds 1500 bytes of data at most.
-
-            if loss < 0 or loss > 100:
-                loss = 0
-                warning(
-                    "Invalid packet loss. The experiment default is used instead.\n"
-                )
+            if aqm != "red":
+                limit = round(
+                    limit / 1500
+                )  # A TCP packet holds 1500 bytes of data at most.
 
             if n_b_unit not in self.__N_B_UNITS.values():
                 n_b_unit = N_B_UNIT_DEFAULT
@@ -567,7 +558,7 @@ class Experiment:
         if self.__has_tshark:
             quietRun(
                 f"killall -15 tshark"
-            )  # Softly terminate any tcpdump/TShark that might still be running. Put the code here to reduce useless capture.
+            )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
 
         quietRun(
             "killall -15 iperf3"
@@ -617,11 +608,6 @@ if __name__ == "__main__":
     experiment = Experiment()
     experiment.clear_output()
     experiment.set_bdp()
-    experiment.do(group=GROUP_A, n=1)
-
-    """
-    experiment.do(aqm="CoDel", group=GROUP_A, n=1)
-    experiment.do(aqm="PIE", group=GROUP_A, n=1, target=15)
-    experiment.do(aqm="RED", group=GROUP_A, n=1)
-    experiment.do(aqm="SFQ", group=GROUP_A, n=1)
-    """
+    experiment.do(
+        group=GROUP_A, group_suffix="_sp", has_tshark=True, limit=150000, n=1
+    )  # limit = 100 * MTU
