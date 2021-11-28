@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211127
+Version: 2.0.0.20211128
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-27 00:20:41
+LastEditTime: 2021-11-28 23:57:55
 '''
 """
 
@@ -26,6 +26,9 @@ from net import check_bw_unit, Net
 
 ALPHA_DEFAULT = 2
 BETA_DEFAULT = 25
+BW_DEFAULT = 1
+BW_UNIT_DEFAULT = "gbit"
+DELAY_DEFAULT = 20
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
@@ -387,9 +390,9 @@ class Experiment:
         avpkt: int = 1000,
         aqm: str = "",
         beta: int = BETA_DEFAULT,
-        bw: int = 1,
-        bw_unit: str = "gbit",
-        delay: int = 20,
+        bw: int = BW_DEFAULT,
+        bw_unit: str = BW_UNIT_DEFAULT,
+        delay: int = DELAY_DEFAULT,
         group_suffix: str = "",
         has_capture: bool = False,
         has_clean_lab: bool = False,
@@ -419,11 +422,11 @@ class Experiment:
         beta : int, optional
             A larger parameter for PIE to control the drop probability (the default is defined by a constant `BETA_DEFAULT`, and the value should be in the range between 0 and 32).
         bw : int, optional
-            The bandwidth (the default is 1).
+            The bandwidth (the default is defined by a constant `BW_DEFAULT`).
         bw_unit : str, optional
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
+            The bandwidth unit (the default is defined by a constant `BW_UNIT_DEFAULT`, and the value should be one of "gbit" and "mbit").
         delay : int, optional
-            The latency in milliseconds (the default is 20).
+            The latency in milliseconds (the default is defined by a constant `DELAY_DEFAULT`).
         group_suffix: str, optional
             The suffix added to the experiment group for the output directory (the default is an empty string).
         has_capture : bool, optional
@@ -565,17 +568,22 @@ class Experiment:
         self.__mn.stop()
         info("\n")
 
-    def set_bdp(self, bw: int = 1, bw_unit: str = "gbit", delay: int = 20) -> None:
+    def set_bdp(
+        self,
+        bw: int = BW_DEFAULT,
+        bw_unit: str = BW_UNIT_DEFAULT,
+        delay: int = DELAY_DEFAULT,
+    ) -> None:
         """Set the bandwidth-delay product (BDP).
 
         Parameters
         ----------
         bw : int, optional
-            The bandwidth for determining BDP (the default is 1).
+            The bandwidth for determining BDP (the default is defined by a constant `BW_DEFAULT`).
         bw_unit : str, optional
-            The bandwidth unit (the default is "gbit", and "mbit" is another accepted value).
+            The bandwidth unit (the default is defined by a constant `BW_UNIT_DEFAULT`, and the value should be one of "gbit" and "mbit").
         delay : int, optional
-            The latency in milliseconds (the default is 20).
+            The latency in milliseconds (the default is defined by a constant `DELAY_DEFAULT`).
 
         Raises
         ------
