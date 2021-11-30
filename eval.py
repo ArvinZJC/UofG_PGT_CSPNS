@@ -5,7 +5,7 @@ Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 16:41:43
+LastEditTime: 2021-11-30 17:24:36
 '''
 """
 
@@ -245,7 +245,7 @@ class Eval:
         plt.title("FCT achieved in each experiment")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result, label=self.__label(name=experiment))
+            plt.bar(self.__label(name=experiment), result)
 
         plt.ylabel("FCT (sec)")
         plt.ylim(np.min(results) - 1, np.max(results) + 0.2)
@@ -358,7 +358,7 @@ class Eval:
         plt.title("Link utilisation")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result, label=self.__label(name=experiment))
+            plt.bar(self.__label(name=experiment), result)
 
         plt.axhline(y=90, color="r", linestyle="-")
         plt.ylabel("link utilisation (%)")
