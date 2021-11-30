@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211127
+Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-27 00:59:13
+LastEditTime: 2021-11-30 16:41:43
 '''
 """
 
@@ -34,19 +34,35 @@ class Eval:
         file_formatted : str
             The filename with the file extension of the formatted output file.
         """
+        self.__ARED = "ared"  # The name of the experiment for ARED.
         self.__BW_NAME_DEFAULT = (
             "1gbit"  # The default name of the experiment's bandwidth.
         )
+        self.__CODEL = "codel"  # The name of the experiment for CoDel.
         self.__FLOW_1 = "1f"  # The name of the experiment using 1 flow.
         self.__FLOW_2 = "2f"  # The name of the experiment using 2 flows.
-        self.__CODEL = "codel"  # The name of the experiment for CoDel.
         self.__PIE = "pie"  # The name of the experiment for PIE.
-        self.__RED = "red"  # The name of the experiment for RED.
         self.__SFQ = "sfq"  # The name of the experiment for SFQ.
         self.__TBF = "baseline"  # The name of the experiment for the baseline.
         self.__base_dir = base_dir
         self.__file = file
         self.__file_formatted = file_formatted
+
+    def __label(self, name: str) -> str:
+        """Produce the label based on the experiment name.
+
+        Parameters
+        ----------
+        name : str
+            The experiment name.
+        """
+        if name == self.__CODEL:
+            return "CoDel"
+
+        if name == self.__TBF:
+            return name.capitalize()
+
+        return name.upper()
 
     def __make_cwnd_plot(
         self, base_dir: str, colours: np.ndarray, experiments: list, name: str
@@ -68,9 +84,7 @@ class Eval:
             f"*** Plotting the baseline and the AQM algorithm's CWND over time: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT} - {name}\n"
         )
         plt.figure()
-        plt.title(
-            f"CWND over time: {'CoDel' if name == self.__CODEL else name.upper()}"
-        )
+        plt.title(f"CWND over time: {self.__label(name=name)}")
 
         for experiment, colour in zip(experiments, colours):
             if experiment == self.__TBF or experiment == name:
@@ -79,7 +93,9 @@ class Eval:
                     header=None,
                     sep=" ",
                 )[:-1][[0, 2]]
-                plt.plot(data[0], data[2], color=colour, label=experiment)
+                plt.plot(
+                    data[0], data[2], color=colour, label=self.__label(name=experiment)
+                )
 
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         plt.xlabel("time (sec)")
@@ -109,7 +125,7 @@ class Eval:
                 header=None,
                 sep=" ",
             )[:-1][[0, 3]]
-            plt.plot(data[0], data[3], label=experiment)
+            plt.plot(data[0], data[3], label=self.__label(name=experiment))
 
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         plt.xlabel("time (s)")
@@ -170,7 +186,7 @@ class Eval:
                         data[0],
                         data[1],
                         color=colour,
-                        label=experiment if i == 0 else None,
+                        label=self.__label(name=experiment) if i == 0 else None,
                     )
 
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -194,7 +210,7 @@ class Eval:
         )
         colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
 
-        for name in [self.__CODEL, self.__PIE, self.__RED]:
+        for name in [self.__ARED, self.__CODEL, self.__PIE]:
             self.__make_cwnd_plot(
                 base_dir=base_dir, colours=colours, experiments=experiments, name=name
             )
@@ -229,9 +245,8 @@ class Eval:
         plt.title("FCT achieved in each experiment")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result)
+            plt.bar(experiment, result, label=self.__label(name=experiment))
 
-        plt.xlabel("experiment")
         plt.ylabel("FCT (sec)")
         plt.ylim(np.min(results) - 1, np.max(results) + 0.2)
         plt.savefig(os.path.join(base_dir, "fct.png"))
@@ -265,9 +280,8 @@ class Eval:
         plt.title("RR achieved in each experiment")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result)
+            plt.bar(experiment, result, label=self.__label(name=experiment))
 
-        plt.xlabel("experiment")
         plt.ylabel("RR (%)")
         plt.savefig(os.path.join(base_dir, "rr.png"))
 
@@ -319,7 +333,11 @@ class Eval:
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
         experiments = sorted(
-            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
+            [
+                entry.name
+                for entry in os.scandir(base_dir)
+                if entry.is_dir() and entry.name != self.__TBF
+            ]
         )
         results = [
             pd.read_csv(
@@ -331,6 +349,8 @@ class Eval:
             * 100
             for experiment in experiments
         ]
+        results_min = np.min(results)
+        results_min = results_min if results_min < 90 else 90
         info(
             f"*** Plotting link utilisation: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
         )
@@ -338,11 +358,11 @@ class Eval:
         plt.title("Link utilisation")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result)
+            plt.bar(experiment, result, label=self.__label(name=experiment))
 
-        plt.xlabel("experiment")
+        plt.axhline(y=90, color="r", linestyle="-")
         plt.ylabel("link utilisation (%)")
-        plt.ylim(np.min(results) - 5, 100)
+        plt.ylim(results_min - 5, 100)
         plt.savefig(os.path.join(base_dir, "utilisation.png"))
 
 

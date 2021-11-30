@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211127
+Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-27 00:20:41
+LastEditTime: 2021-11-30 15:52:42
 '''
 """
 
@@ -50,9 +50,9 @@ class Experiment:
         }  # The dictionary of the units of the number of bytes transferred from an iperf client.
         self.__OUTPUT_JFILE = "result.json"  # The filename with the file extension of the output json file.
         self.__QDISC = [
+            "ared",
             "codel",
             "pie",
-            "red",
             "sfq",
             "tbf",
         ]  # A list of the supported classlist queueing disciplines.
@@ -80,14 +80,14 @@ class Experiment:
     ) -> None:
         """Apply a classless queueing discipline.
 
-        Support Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Random Early Detection (RED), Token Bucket Filter (TBF), and Proportional Integral Controller-Enhanced (PIE).
+        Support Adaptive Random Early Detection (ARED), Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Token Bucket Filter (TBF), and Proportional Integral Controller-Enhanced (PIE).
 
         Parameters
         ----------
         alpha : int
             A smaller parameter for PIE to control the drop probability.
         avpkt : int
-            A parameter for RED used with the burst to determine the time constant for average queue size calculations.
+            A parameter for ARED used with the burst to determine the time constant for average queue size calculations.
         beta : int
             A larger parameter for PIE to control the drop probability.
         bw : int
@@ -97,8 +97,8 @@ class Experiment:
         interval : int
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
+            For ARED, the limit on the queue size in bytes.
             For CoDel and PIE, the limit on the queue size in packets.
-            For RED, the limit on the queue size in bytes.
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
         perturb : int
             The interval in seconds for the queue algorithm perturbation in SFQ.
@@ -144,18 +144,18 @@ class Experiment:
                 f"root handle 1: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
             )
         else:
-            cmd += f"parent 1: handle 2: {qdisc} "
+            cmd += f"parent 1: handle 2: {'red' if qdisc == 'ared' else qdisc} "
 
-            if qdisc == "codel":
-                cmd += f"limit {limit} interval {interval}ms target {target}ms"
-            elif qdisc == "pie":
-                cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
-            elif qdisc == "red":
+            if qdisc == "ared":
                 # References:
                 # 1. https://man7.org/linux/man-pages/man8/tc-red.8.html
                 # 2. http://www.fifi.org/doc/HOWTO/en-html/Adv-Routing-HOWTO-14.html - Section 14.5
                 min_size = ceil(floor(limit / 4) / 3)
-                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} limit {limit}"
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} ecn limit {limit}"
+            elif qdisc == "codel":
+                cmd += f"limit {limit} interval {interval}ms target {target}ms"
+            elif qdisc == "pie":
+                cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
             else:
                 cmd += f"perturb {perturb}"
 
@@ -415,7 +415,7 @@ class Experiment:
         aqm : str, optional
             A classless queueing discipline representing an AQM algorithm (the default is an empty string).
         avpkt : int, optional
-            A parameter for RED used with the burst to determine the time constant for average queue size calculations (the default is 1000).
+            A parameter for ARED used with the burst to determine the time constant for average queue size calculations (the default is 1000).
         beta : int, optional
             A larger parameter for PIE to control the drop probability (the default is defined by a constant `BETA_DEFAULT`, and the value should be in the range between 0 and 32).
         bw : int, optional
@@ -436,7 +436,7 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
             The number of bytes that can be queued waiting for tokens to become available (the default is 0, which means that it will be determined accordingly by the program).
-            This parameter is directly used for RED and TBF. CoDel and PIE require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
+            This parameter is directly used for ARED and TBF. CoDel and PIE require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional
@@ -520,7 +520,7 @@ class Experiment:
                     "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
                 )
 
-            if aqm != "red":
+            if aqm != "ared":
                 limit = round(
                     limit / 1500
                 )  # A TCP packet holds 1500 bytes of data at most.
