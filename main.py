@@ -5,7 +5,7 @@ Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 15:21:27
+LastEditTime: 2021-11-30 16:59:36
 '''
 """
 
@@ -23,7 +23,7 @@ from experiment import (
 from eval import Eval
 
 setLogLevel("info")
-cleanup()  # NOTE: This line should be commented out after dev.
+# cleanup()
 experiment = Experiment()
 experiment.clear_output()
 experiment.set_bdp()
