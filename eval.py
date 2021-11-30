@@ -5,7 +5,7 @@ Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 17:24:36
+LastEditTime: 2021-11-30 17:40:21
 '''
 """
 
@@ -280,7 +280,7 @@ class Eval:
         plt.title("RR achieved in each experiment")
 
         for experiment, result in zip(experiments, results):
-            plt.bar(experiment, result, label=self.__label(name=experiment))
+            plt.bar(self.__label(name=experiment), result)
 
         plt.ylabel("RR (%)")
         plt.savefig(os.path.join(base_dir, "rr.png"))
