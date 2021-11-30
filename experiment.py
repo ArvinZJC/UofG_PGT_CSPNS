@@ -1,19 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-<<<<<<< HEAD
 Version: 2.0.0.20211130
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 15:52:42
-=======
-Version: 2.0.0.20211128
-Author: Arvin Zhao
-Date: 2021-11-18 12:03:55
-Last Editors: Arvin Zhao
-LastEditTime: 2021-11-28 23:57:55
->>>>>>> 7843d55f3e01824889ce65a991f1027cbed474a3
+LastEditTime: 2021-11-30 16:46:13
 '''
 """
 
