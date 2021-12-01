@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211130
+Version: 2.0.0.20211201
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 17:40:21
+LastEditTime: 2021-12-01 12:21:19
 '''
 """
 
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from experiment import GROUP_A, GROUP_B
+from experiment import GROUP_A, GROUP_B, QDISC
 
 
 class Eval:
@@ -44,6 +44,10 @@ class Eval:
         self.__PIE = "pie"  # The name of the experiment for PIE.
         self.__SFQ = "sfq"  # The name of the experiment for SFQ.
         self.__TBF = "baseline"  # The name of the experiment for the baseline.
+        self.__EXPERIMENTS = [self.__TBF]
+        self.__EXPERIMENTS.extend(
+            [experiment for experiment in QDISC if experiment != "tbf"]
+        )
         self.__base_dir = base_dir
         self.__file = file
         self.__file_formatted = file_formatted
@@ -64,9 +68,7 @@ class Eval:
 
         return name.upper()
 
-    def __make_cwnd_plot(
-        self, base_dir: str, colours: np.ndarray, experiments: list, name: str
-    ) -> None:
+    def __make_cwnd_plot(self, base_dir: str, colours: np.ndarray, name: str) -> None:
         """Make a plot indicating CWND over time.
 
         Parameters
@@ -75,8 +77,6 @@ class Eval:
             The name of the output base directory.
         colours : numpy.ndarray
             A customised colour map.
-        experiments : list
-            A list of experiment names.
         name : str
             The name of an experiment for an AQM algorithm to compare with the baseline.
         """
@@ -86,7 +86,7 @@ class Eval:
         plt.figure()
         plt.title(f"CWND over time: {self.__label(name=name)}")
 
-        for experiment, colour in zip(experiments, colours):
+        for experiment, colour in zip(self.__EXPERIMENTS, colours):
             if experiment == self.__TBF or experiment == name:
                 data = pd.read_csv(
                     os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
@@ -103,7 +103,7 @@ class Eval:
         plt.tight_layout()
         plt.savefig(os.path.join(base_dir, f"cwnd_{name}.png"))
 
-    def __make_rtt_plot(self, base_dir: str, bw_name: str, experiments: list) -> None:
+    def __make_rtt_plot(self, base_dir: str, bw_name: str) -> None:
         """Make a plot indicating RTT over time.
 
         Parameters
@@ -112,14 +112,12 @@ class Eval:
             The name of the output base directory.
         bw_name : str
             The name of the experiment's bandwidth.
-        experiments : list
-            A list of experiment names.
         """
         info(f"*** Plotting RTT over time: {self.__FLOW_1} - {GROUP_B} - {bw_name}\n")
         plt.figure()
         plt.title("RTT over time")
 
-        for experiment in experiments:
+        for experiment in self.__EXPERIMENTS:
             data = pd.read_csv(
                 os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
                 header=None,
@@ -134,12 +132,7 @@ class Eval:
         plt.savefig(os.path.join(base_dir, "rtt.png"))
 
     def __make_throughput_plot(
-        self,
-        base_dir: str,
-        bw_name: str,
-        colours: np.ndarray,
-        experiments: list,
-        has_sfq_only: bool,
+        self, base_dir: str, bw_name: str, colours: np.ndarray, has_sfq_only: bool
     ) -> None:
         """Make a plot indicating throughput over time.
 
@@ -151,8 +144,6 @@ class Eval:
             The name of the experiment's bandwidth.
         colours : numpy.ndarray
             A customised colour map.
-        experiments : list
-            A list of experiment names.
         has_sfq_only : bool
             A flag indicating if SFQ is the only AQM algorithm on the plot.
         """
@@ -170,7 +161,7 @@ class Eval:
             else "Fairness"
         )
 
-        for experiment, colour in zip(experiments, colours):
+        for experiment, colour in zip(self.__EXPERIMENTS, colours):
             if (
                 has_sfq_only and experiment in [self.__SFQ, self.__TBF]
             ) or not has_sfq_only:
@@ -205,15 +196,10 @@ class Eval:
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
-        experiments = sorted(
-            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-        )
-        colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
+        colours = plt.cm.jet(np.linspace(0, 1, len(self.__EXPERIMENTS)))
 
         for name in [self.__ARED, self.__CODEL, self.__PIE]:
-            self.__make_cwnd_plot(
-                base_dir=base_dir, colours=colours, experiments=experiments, name=name
-            )
+            self.__make_cwnd_plot(base_dir=base_dir, colours=colours, name=name)
 
     def plot_fct(self, group_suffix: str = "") -> None:
         """Plot FCT for the group transferring the specified amount of data with 1 flow and the default bandwidth.
@@ -227,16 +213,13 @@ class Eval:
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, group, self.__BW_NAME_DEFAULT
         )
-        experiments = sorted(
-            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-        )
         results = [
             pd.read_csv(
                 os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
                 header=None,
                 sep=" ",
             )[-1:][[0]][0]
-            for experiment in experiments
+            for experiment in self.__EXPERIMENTS
         ]
         info(
             f"*** Plotting FCT: {self.__FLOW_1} - {group} - {self.__BW_NAME_DEFAULT}\n"
@@ -244,7 +227,7 @@ class Eval:
         plt.figure()
         plt.title("FCT achieved in each experiment")
 
-        for experiment, result in zip(experiments, results):
+        for experiment, result in zip(self.__EXPERIMENTS, results):
             plt.bar(self.__label(name=experiment), result)
 
         plt.ylabel("FCT (sec)")
@@ -263,12 +246,9 @@ class Eval:
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, group, self.__BW_NAME_DEFAULT
         )
-        experiments = sorted(
-            [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-        )
         results = []
 
-        for experiment in experiments:
+        for experiment in self.__EXPERIMENTS:
             lines = open(
                 os.path.join(base_dir, experiment, "s1-eth2", self.__file), "r"
             ).readlines()
@@ -279,7 +259,7 @@ class Eval:
         plt.figure()
         plt.title("RR achieved in each experiment")
 
-        for experiment, result in zip(experiments, results):
+        for experiment, result in zip(self.__EXPERIMENTS, results):
             plt.bar(self.__label(name=experiment), result)
 
         plt.ylabel("RR (%)")
@@ -294,12 +274,7 @@ class Eval:
 
         for bw_name in bw_names:
             base_dir = os.path.join(group_base_dir, bw_name)
-            experiments = sorted(
-                [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-            )
-            self.__make_rtt_plot(
-                base_dir=base_dir, bw_name=bw_name, experiments=experiments
-            )
+            self.__make_rtt_plot(base_dir=base_dir, bw_name=bw_name)
 
     def plot_throughput(self) -> None:
         """Plot throughput over time for the group transferring data for the same time length with 2 flows and different bandwidth settings."""
@@ -310,10 +285,7 @@ class Eval:
 
         for bw_name in bw_names:
             base_dir = os.path.join(group_base_dir, bw_name)
-            experiments = sorted(
-                [entry.name for entry in os.scandir(base_dir) if entry.is_dir()]
-            )
-            colours = plt.cm.jet(np.linspace(0, 1, len(experiments)))
+            colours = plt.cm.jet(np.linspace(0, 1, len(self.__EXPERIMENTS)))
 
             for has_sfq_only in [True, False]:
                 if not has_sfq_only and bw_name != self.__BW_NAME_DEFAULT:
@@ -323,7 +295,6 @@ class Eval:
                     base_dir=base_dir,
                     bw_name=bw_name,
                     colours=colours,
-                    experiments=experiments,
                     has_sfq_only=has_sfq_only,
                 )
 
@@ -332,13 +303,9 @@ class Eval:
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
-        experiments = sorted(
-            [
-                entry.name
-                for entry in os.scandir(base_dir)
-                if entry.is_dir() and entry.name != self.__TBF
-            ]
-        )
+        experiments = [
+            experiment for experiment in self.__EXPERIMENTS if experiment != self.__TBF
+        ]
         results = [
             pd.read_csv(
                 os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
@@ -360,7 +327,7 @@ class Eval:
         for experiment, result in zip(experiments, results):
             plt.bar(self.__label(name=experiment), result)
 
-        plt.axhline(y=90, color="r", linestyle="-")
+        plt.axhline(y=90, color="k", linestyle="-")
         plt.ylabel("link utilisation (%)")
         plt.ylim(results_min - 5, 100)
         plt.savefig(os.path.join(base_dir, "utilisation.png"))

@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211130
+Version: 2.0.0.20211201
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-11-30 16:46:13
+LastEditTime: 2021-12-01 12:00:33
 '''
 """
 
@@ -35,6 +35,13 @@ N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE = "result.txt"  # The filename with the file extension of the output file.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
+QDISC = [
+    "tbf",
+    "ared",
+    "codel",
+    "pie",
+    "sfq",
+]  # A list of the supported classlist queueing disciplines.
 
 
 class Experiment:
@@ -52,13 +59,6 @@ class Experiment:
             2: "M",
         }  # The dictionary of the units of the number of bytes transferred from an iperf client.
         self.__OUTPUT_JFILE = "result.json"  # The filename with the file extension of the output json file.
-        self.__QDISC = [
-            "ared",
-            "codel",
-            "pie",
-            "sfq",
-            "tbf",
-        ]  # A list of the supported classlist queueing disciplines.
         self.__bdp = None
         self.__group = None  # The experiment group.
         self.__has_capture = None  # A flag indicating if the PCAPNG file should be generated using TShark.
@@ -122,7 +122,7 @@ class Experiment:
         ValueError
             The classless queueing discipline is invalid. Check if it is one of the supported ones.
         """
-        if qdisc not in self.__QDISC:
+        if qdisc not in QDISC:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
