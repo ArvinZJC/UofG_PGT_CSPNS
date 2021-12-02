@@ -5,7 +5,7 @@ Version: 2.0.0.20211202
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 01:22:06
+LastEditTime: 2021-12-02 16:44:19
 '''
 """
 
@@ -60,6 +60,9 @@ class Eval:
         """
         if name == CODEL:
             return "CoDel"
+
+        if name == FQ_CODEL:
+            return "FQ-CoDel"
 
         if name == BL:
             return name.capitalize()
