@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211201
+Version: 2.0.0.20211202
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-01 23:14:35
+LastEditTime: 2021-12-02 01:21:12
 '''
 """
 
@@ -32,6 +32,7 @@ BW_DEFAULT = 1
 BW_UNIT_DEFAULT = "gbit"
 CODEL = "codel"  # The name of the experiment for CoDel.
 DELAY_DEFAULT = 20
+FQ_CODEL = "fq_codel"  # The name of the experiment for FQ-CoDel.
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
 N_B_UNIT_DEFAULT = "M"
@@ -39,7 +40,6 @@ OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE = "result.txt"  # The filename with the file extension of the output file.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
 PIE = "pie"  # The name of the experiment for PIE.
-SFB = "sfb"  # The name of the experiment for SFB.
 TBF = "tbf"  # The name of the algorithm used in the experiment for the baseline.
 
 
@@ -99,7 +99,7 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
             For ARED, the limit on the queue size in bytes.
-            For CoDel, PIE, and SFB, the limit on the queue size in packets.
+            For CoDel, FQ-CoDel, and PIE, the limit on the queue size in packets.
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
         qdisc : str
             A classless queueing discipline.
@@ -118,7 +118,7 @@ class Experiment:
         ValueError
             The classless queueing discipline is invalid. Check if it is one of the supported ones.
         """
-        if qdisc not in [ARED, CODEL, PIE, SFB, TBF]:
+        if qdisc not in [ARED, CODEL, FQ_CODEL, PIE, TBF]:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
@@ -153,7 +153,9 @@ class Experiment:
                 cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} ecn"
             elif qdisc == CODEL:
                 cmd += f"interval {interval}ms target {target}ms"
-            elif qdisc == PIE:
+            elif qdisc == FQ_CODEL:
+                cmd += f"flows {self.__n}"
+            else:
                 cmd += (
                     f"alpha {alpha} beta {beta} target {target}ms tupdate {tupdate}ms"
                 )
@@ -434,7 +436,7 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
             The number of bytes that can be queued waiting for tokens to become available (the default is 0, which means that it will be determined accordingly by the program).
-            This parameter is directly used for ARED and TBF. CoDel, PIE, and SFB require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
+            This parameter is directly used for ARED and TBF. CoDel, FQ-CoDel, and PIE require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional

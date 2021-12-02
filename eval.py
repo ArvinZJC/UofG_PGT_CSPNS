@@ -5,7 +5,7 @@ Version: 2.0.0.20211202
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 00:01:24
+LastEditTime: 2021-12-02 01:22:06
 '''
 """
 
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from experiment import ARED, BL, CODEL, GROUP_A, GROUP_B, PIE, SFB
+from experiment import ARED, BL, CODEL, FQ_CODEL, GROUP_A, GROUP_B, PIE
 
 
 class Eval:
@@ -41,8 +41,8 @@ class Eval:
             BL,
             ARED,
             CODEL,
+            FQ_CODEL,
             PIE,
-            SFB,
         ]  # A list of the experiment names.
         self.__FLOW_1 = "1f"  # The name of the experiment using 1 flow.
         self.__FLOW_2 = "2f"  # The name of the experiment using 2 flows.

@@ -35,5 +35,5 @@ This repository contains code written for doing a **CS Project for Networked Sys
 3. The project relates to the evaluation of 4 different Active Queue Management (AQM) mechanisms over different network setups. For more info, please refer to the project report.
     - Adaptive Random Early Detection (ARED)
     - Controlled Delay (CoDel)
+    - Fair Queuing Controlled Delay (FQ-CoDel)
     - Proportional Integral controller Enhanced (PIE)
-    - Stochastic Fair Blue (SFB)
