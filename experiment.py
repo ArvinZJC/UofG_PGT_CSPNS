@@ -5,7 +5,7 @@ Version: 2.0.0.20211202
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 01:21:12
+LastEditTime: 2021-12-02 15:53:35
 '''
 """
 
@@ -121,7 +121,14 @@ class Experiment:
         if qdisc not in [ARED, CODEL, FQ_CODEL, PIE, TBF]:
             raise ValueError("invalid classless queueing discipline")
 
-        info(f"*** Applying {qdisc.upper()}\n")
+        if qdisc == CODEL:
+            qdisc_name = "CoDel"
+        elif qdisc == FQ_CODEL:
+            qdisc_name = "FQ-CoDel"
+        else:
+            qdisc_name = qdisc.upper()
+
+        info(f"*** Applying {qdisc_name}\n")
         cmd = "tc qdisc add dev s3-eth2 "
 
         if qdisc == TBF:
@@ -153,9 +160,7 @@ class Experiment:
                 cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} ecn"
             elif qdisc == CODEL:
                 cmd += f"interval {interval}ms target {target}ms"
-            elif qdisc == FQ_CODEL:
-                cmd += f"flows {self.__n}"
-            else:
+            elif qdisc == PIE:
                 cmd += (
                     f"alpha {alpha} beta {beta} target {target}ms tupdate {tupdate}ms"
                 )
@@ -401,7 +406,7 @@ class Experiment:
         n_b: int = 500,
         n_b_unit: str = N_B_UNIT_DEFAULT,
         target: int = 5,
-        time: int = 30,
+        time: int = 60,
         tupdate: int = 15,
     ) -> None:
         """Do an experiment.
@@ -447,7 +452,7 @@ class Experiment:
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
         time : int, optional
-            The time in seconds for running an iperf client (the default is 30).
+            The time in seconds for running an iperf client (the default is 60).
         tupdate : int, optional
             The frequency in milliseconds for PIE at which the system drop probability is calculated (the default is 15).
 
