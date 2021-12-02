@@ -5,7 +5,7 @@ Version: 2.0.0.20211201
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-01 12:00:33
+LastEditTime: 2021-12-01 23:14:35
 '''
 """
 
@@ -25,9 +25,12 @@ from errors import PoorPrepError
 from net import check_bw_unit, Net
 
 ALPHA_DEFAULT = 2
+ARED = "ared"  # The name of the experiment for ARED.
 BETA_DEFAULT = 25
+BL = "baseline"  # The name of the experiment for the baseline.
 BW_DEFAULT = 1
 BW_UNIT_DEFAULT = "gbit"
+CODEL = "codel"  # The name of the experiment for CoDel.
 DELAY_DEFAULT = 20
 GROUP_A = "s_amount"  # Group A: transfer the specified/same amount of data.
 GROUP_B = "s_time"  # Group B: transfer data for the specified/same time length.
@@ -35,13 +38,9 @@ N_B_UNIT_DEFAULT = "M"
 OUTPUT_BASE_DIR = "output"  # The name of the output base directory.
 OUTPUT_FILE = "result.txt"  # The filename with the file extension of the output file.
 OUTPUT_FILE_FORMATTED = "result_new.txt"  # The filename with the file extension of the formatted output file.
-QDISC = [
-    "tbf",
-    "ared",
-    "codel",
-    "pie",
-    "sfq",
-]  # A list of the supported classlist queueing disciplines.
+PIE = "pie"  # The name of the experiment for PIE.
+SFB = "sfb"  # The name of the experiment for SFB.
+TBF = "tbf"  # The name of the algorithm used in the experiment for the baseline.
 
 
 class Experiment:
@@ -76,14 +75,13 @@ class Experiment:
         bw_unit: str,
         interval: int,
         limit: int,
-        perturb: int,
         target: int,
         tupdate: int,
-        qdisc: str = "tbf",
+        qdisc: str = TBF,
     ) -> None:
         """Apply a classless queueing discipline.
 
-        Support Adaptive Random Early Detection (ARED), Controlled Delay (CoDel), Stochastic Fair Queueing (SFQ), Token Bucket Filter (TBF), and Proportional Integral Controller-Enhanced (PIE).
+        Support Adaptive Random Early Detection (ARED), Controlled Delay (CoDel), Proportional Integral controller Enhanced (PIE), Stochastic Fair Blue (SFB), and Token Bucket Filter (TBF).
 
         Parameters
         ----------
@@ -101,10 +99,8 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale.
         limit : int
             For ARED, the limit on the queue size in bytes.
-            For CoDel and PIE, the limit on the queue size in packets.
+            For CoDel, PIE, and SFB, the limit on the queue size in packets.
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
-        perturb : int
-            The interval in seconds for the queue algorithm perturbation in SFQ.
         qdisc : str
             A classless queueing discipline.
         target : int
@@ -113,7 +109,7 @@ class Experiment:
         tupdate : int
             The frequency in milliseconds for PIE at which the system drop probability is calculated.
         qdisc : str, optional
-            A classless queueing discipline (the default is "tbf").
+            A classless queueing discipline (the default is defined by a constant `TBF`).
 
         Raises
         ------
@@ -122,13 +118,13 @@ class Experiment:
         ValueError
             The classless queueing discipline is invalid. Check if it is one of the supported ones.
         """
-        if qdisc not in QDISC:
+        if qdisc not in [ARED, CODEL, PIE, SFB, TBF]:
             raise ValueError("invalid classless queueing discipline")
 
         info(f"*** Applying {qdisc.upper()}\n")
         cmd = "tc qdisc add dev s3-eth2 "
 
-        if qdisc == "tbf":
+        if qdisc == TBF:
             hz = int(
                 Popen(
                     "egrep '^CONFIG_HZ_[0-9]+' /boot/config-`uname -r`",
@@ -147,20 +143,20 @@ class Experiment:
                 f"root handle 1: {qdisc} burst {burst} limit {limit} rate {bw}{bw_unit}"
             )
         else:
-            cmd += f"parent 1: handle 2: {'red' if qdisc == 'ared' else qdisc} "
+            cmd += f"parent 1: handle 2: {'red' if qdisc == 'ared' else qdisc} limit {limit} "
 
-            if qdisc == "ared":
+            if qdisc == ARED:
                 # References:
                 # 1. https://man7.org/linux/man-pages/man8/tc-red.8.html
                 # 2. http://www.fifi.org/doc/HOWTO/en-html/Adv-Routing-HOWTO-14.html - Section 14.5
                 min_size = ceil(floor(limit / 4) / 3)
-                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} ecn limit {limit}"
-            elif qdisc == "codel":
-                cmd += f"limit {limit} interval {interval}ms target {target}ms"
-            elif qdisc == "pie":
-                cmd += f"alpha {alpha} beta {beta} limit {limit} target {target}ms tupdate {tupdate}ms"
-            else:
-                cmd += f"perturb {perturb}"
+                cmd += f"adaptative avpkt {avpkt} bandwidth {bw}{bw_unit} burst {ceil(min_size / avpkt)} ecn"
+            elif qdisc == CODEL:
+                cmd += f"interval {interval}ms target {target}ms"
+            elif qdisc == PIE:
+                cmd += (
+                    f"alpha {alpha} beta {beta} target {target}ms tupdate {tupdate}ms"
+                )
 
         info(f'*** {self.__CLIENT} : ("{cmd}")\n')
         check_call(cmd, shell=True)
@@ -402,7 +398,6 @@ class Experiment:
         n: int = 2,
         n_b: int = 500,
         n_b_unit: str = N_B_UNIT_DEFAULT,
-        perturb: int = 60,
         target: int = 5,
         time: int = 30,
         tupdate: int = 15,
@@ -439,15 +434,13 @@ class Experiment:
             A value in milliseconds for CoDel to ensure that the measured minimum delay does not become too stale (the default is 100).
         limit : int, optional
             The number of bytes that can be queued waiting for tokens to become available (the default is 0, which means that it will be determined accordingly by the program).
-            This parameter is directly used for ARED and TBF. CoDel and PIE require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
+            This parameter is directly used for ARED and TBF. CoDel, PIE, and SFB require the limit on the queue size in packets. Hence, the value will be converted automatically to suit their needs.
         n : int, optional
             The number of the hosts on each side of the dumbbell topology (the default is 2, and the value should be in the range between 1 and 5).
         n_b : int, optional
             The number of bytes transferred from an iperf client (the default is 500).
         n_b_unit : str, optional
             The unit of the number of bytes transferred from an iperf client (the default is defined by a constant `N_B_UNIT_DEFAULT`, and the value should be one of the uppercases "G", "K", and "M").
-        perturb : int, optional
-            The interval in seconds for the queue algorithm perturbation in SFQ (the default is 60).
         target : int, optional
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds (the default is 5).
             For PIE, the expected queue delay in milliseconds (the default is not for this case).
@@ -481,7 +474,7 @@ class Experiment:
         aqm = aqm.strip().lower()
         limit = 10 * self.__bdp if limit == 0 else limit
         n_b_unit = n_b_unit.strip()
-        name = "baseline" if aqm == "" or aqm == "tbf" else aqm  # The experiment name.
+        name = BL if aqm == "" or aqm == TBF else aqm  # The experiment name.
         self.__group = group
         self.__has_capture = has_capture
         self.__has_tshark = has_tshark
@@ -510,12 +503,11 @@ class Experiment:
             bw_unit=bw_unit,
             interval=interval,
             limit=limit,
-            perturb=perturb,
             target=target,
             tupdate=tupdate,
         )  # Apply TBF.
 
-        if aqm != "" and aqm != "tbf":
+        if aqm != "" and aqm != TBF:
             if alpha >= beta or alpha < 0 or alpha > 32 or beta < 0 or beta > 32:
                 alpha = ALPHA_DEFAULT
                 beta = BETA_DEFAULT
@@ -523,7 +515,7 @@ class Experiment:
                     "Invalid alpha and beta for PIE. The experiment defaults are used instead.\n"
                 )
 
-            if aqm != "ared":
+            if aqm != ARED:
                 limit = round(
                     limit / 1500
                 )  # A TCP packet holds 1500 bytes of data at most.
@@ -542,7 +534,6 @@ class Experiment:
                 bw_unit=bw_unit,
                 interval=interval,
                 limit=limit,
-                perturb=perturb,
                 qdisc=aqm,
                 target=target,
                 tupdate=tupdate,

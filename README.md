@@ -6,7 +6,7 @@ This repository contains code written for doing a **CS Project for Networked Sys
 
 ## ATTENTION
 
-1. By 1 December 2021, everything looks good with Ubuntu 20.04.3 LTS + Visual Studio Code (Version: 1.62.3) + Mininet 2.3.0 + Python 3.8.10. To produce experiment results, you need to ensure that the following tools can work properly. TShark should be installed with Mininet, and you may install iperf3 manually.
+1. By 2 December 2021, everything looks good with Ubuntu 20.04.3 LTS + Visual Studio Code (Version: 1.62.3) + Mininet 2.3.0 + Python 3.8.10. To produce experiment results, you need to ensure that the following tools can work properly. TShark should be installed with Mininet, and you may install iperf3 manually.
 
     | Name | Version |
     | :-- | :--: |
@@ -36,4 +36,4 @@ This repository contains code written for doing a **CS Project for Networked Sys
     - Adaptive Random Early Detection (ARED)
     - Controlled Delay (CoDel)
     - Proportional Integral controller Enhanced (PIE)
-    - Stochastic Fairness Queuing (SFQ)
+    - Stochastic Fair Blue (SFB)
