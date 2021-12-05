@@ -1,12 +1,13 @@
 # UofG_PGT_CSPNS
 
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/6d5683c9ff2e47a0b0dd7a68fbbd4a49)](https://www.codacy.com/gh/ArvinZJC/UofG_PGT_CSPNS/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=ArvinZJC/UofG_PGT_CSPNS&amp;utm_campaign=Badge_Grade)
 ![GitHub](https://img.shields.io/github/license/ArvinZJC/UofG_PGT_CSPNS)
 
 This repository contains code written for doing a **CS Project for Networked Systems** during the PGT study of MSc Computing Science in UofG. Please note that the code is licensed under [the MIT License](./LICENSE).
 
 ## ATTENTION
 
-1. By 2 December 2021, everything looks good with Ubuntu 20.04.3 LTS + Visual Studio Code (Version: 1.62.3) + Mininet 2.3.0 + Python 3.8.10. To produce experiment results, you need to ensure that the following tools can work properly. TShark should be installed with Mininet, and you may install iperf3 manually.
+1. By 5 December 2021, everything looks good with Ubuntu 20.04.3 LTS + Visual Studio Code (Version: 1.62.3) + Mininet 2.3.0 + Python 3.8.10. To produce experiment results, you need to ensure that the following tools can work properly. TShark should be installed with Mininet, and you may install iperf3 manually.
 
     | Name | Version |
     | :-- | :--: |
