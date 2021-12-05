@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211202
+Version: 2.0.0.20211205
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 15:53:35
+LastEditTime: 2021-12-05 05:48:26
 '''
 """
 
@@ -556,7 +556,7 @@ class Experiment:
 
         if self.__has_tshark:
             quietRun(
-                f"killall -15 tshark"
+                "killall -15 tshark"
             )  # Softly terminate any TShark that might still be running. Put the code here to reduce useless capture.
 
         quietRun(

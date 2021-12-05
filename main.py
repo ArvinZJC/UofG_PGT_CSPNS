@@ -1,11 +1,11 @@
 """
 '''
 Description: the entry to the experiments and evaluation
-Version: 2.0.0.20211201
+Version: 2.0.0.20211205
 Author: Arvin Zhao
 Date: 2021-11-18 15:41:51
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 01:25:28
+LastEditTime: 2021-12-05 05:47:36
 '''
 """
 
@@ -13,7 +13,6 @@ from mininet.clean import cleanup
 from mininet.log import info, setLogLevel
 
 from experiment import (
-    FQ_CODEL,
     Experiment,
     GROUP_A,
     GROUP_B,
