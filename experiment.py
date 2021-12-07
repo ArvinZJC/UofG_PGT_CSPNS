@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of the experiments
-Version: 2.0.0.20211205
+Version: 2.0.1.20211207
 Author: Arvin Zhao
 Date: 2021-11-18 12:03:55
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-05 05:48:26
+LastEditTime: 2021-12-07 16:55:18
 '''
 """
 
@@ -101,8 +101,6 @@ class Experiment:
             For ARED, the limit on the queue size in bytes.
             For CoDel, FQ-CoDel, and PIE, the limit on the queue size in packets.
             For TBF, the number of bytes that can be queued waiting for tokens to become available.
-        qdisc : str
-            A classless queueing discipline.
         target : int
             For CoDel, the acceptable minimum standing/persistent queue delay in milliseconds.
             For PIE, the expected queue delay in milliseconds.

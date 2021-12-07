@@ -1,11 +1,11 @@
 """
 '''
 Description: the utilities of evaluation
-Version: 2.0.0.20211202
+Version: 2.0.1.20211207
 Author: Arvin Zhao
 Date: 2021-11-21 14:50:13
 Last Editors: Arvin Zhao
-LastEditTime: 2021-12-02 16:44:19
+LastEditTime: 2021-12-07 15:36:38
 '''
 """
 
@@ -253,13 +253,11 @@ class Eval:
         plt.savefig(os.path.join(base_dir, "fairness.png"))
 
     def plot_utilisation(self) -> None:
-        """Plot link utilisation for the group transferring data for the specified time length with 1 flow and the default bandwidth."""
+        """Plot bandwidth utilisation for the group transferring data for the specified time length with 1 flow and the default bandwidth."""
         base_dir = os.path.join(
             self.__base_dir, self.__FLOW_1, GROUP_B, self.__BW_NAME_DEFAULT
         )
-        experiments = [
-            experiment for experiment in self.__EXPERIMENTS if experiment != BL
-        ]
+        experiments = [experiment for experiment in self.__EXPERIMENTS]
         results = [
             pd.read_csv(
                 os.path.join(base_dir, experiment, "hl1", self.__file_formatted),
@@ -273,16 +271,16 @@ class Eval:
         results_min = np.min(results)
         results_min = results_min if results_min < 90 else 90
         info(
-            f"*** Plotting link utilisation: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
+            f"*** Plotting bandwidth utilisation: {self.__FLOW_1} - {GROUP_B} - {self.__BW_NAME_DEFAULT}\n"
         )
         plt.figure()
-        plt.title("Link utilisation")
+        plt.title("Bandwidth utilisation")
 
         for experiment, result in zip(experiments, results):
             plt.bar(self.__label(name=experiment), result)
 
         plt.axhline(y=90, color="k", linestyle="-")
-        plt.ylabel("link utilisation (%)")
+        plt.ylabel("bandwidth utilisation (%)")
         plt.ylim(results_min - 5, 100)
         plt.savefig(os.path.join(base_dir, "utilisation.png"))
 
